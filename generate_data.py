@@ -391,8 +391,11 @@ for season in all_seasons:
 
 seasons_meta = {
     'seasons':    [int(s) for s in reversed(all_seasons)],
-    'first_date': str(games['date'].min()),
-    'last_date':  str(games['date'].max()),
+    # Use the rated period, not the raw games period:
+    # - first_date excludes pre-1986 warm-up (script filters out earlier ratings)
+    # - last_date excludes future-scheduled fixtures present in the source data
+    'first_date': str(df['date'].min()),
+    'last_date':  str(df['date'].max()),
 }
 with open('docs/data/seasons_index.json', 'w') as f:
     json.dump(seasons_meta, f, separators=(',', ':'))
