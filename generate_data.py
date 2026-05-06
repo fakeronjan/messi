@@ -35,6 +35,204 @@ def slug(name):
     return re.sub(r'[^\w]', '_', name).strip('_')
 
 
+# ── Country → flag emoji map ──────────────────────────────────────────────────
+# ISO 3166-1 alpha-2 codes converted to regional indicator pairs.
+# Special UK tag-sequence flags handled inline. Defunct entities → ''.
+_COUNTRY_TO_ISO = {
+    # UEFA
+    'Albania': 'AL', 'Andorra': 'AD', 'Armenia': 'AM', 'Austria': 'AT',
+    'Azerbaijan': 'AZ', 'Belarus': 'BY', 'Belgium': 'BE', 'Bosnia and Herzegovina': 'BA',
+    'Bulgaria': 'BG', 'Croatia': 'HR', 'Cyprus': 'CY', 'Czech Republic': 'CZ',
+    'Denmark': 'DK', 'Estonia': 'EE', 'Faroe Islands': 'FO', 'Finland': 'FI',
+    'France': 'FR', 'Georgia': 'GE', 'Germany': 'DE', 'Gibraltar': 'GI',
+    'Greece': 'GR', 'Hungary': 'HU', 'Iceland': 'IS', 'Israel': 'IL',
+    'Italy': 'IT', 'Kazakhstan': 'KZ', 'Kosovo': 'XK', 'Latvia': 'LV',
+    'Liechtenstein': 'LI', 'Lithuania': 'LT', 'Luxembourg': 'LU', 'Malta': 'MT',
+    'Moldova': 'MD', 'Monaco': 'MC', 'Montenegro': 'ME', 'Netherlands': 'NL',
+    'North Macedonia': 'MK', 'Norway': 'NO', 'Poland': 'PL',
+    'Portugal': 'PT', 'Republic of Ireland': 'IE', 'Romania': 'RO', 'Russia': 'RU',
+    'San Marino': 'SM', 'Serbia': 'RS', 'Slovakia': 'SK', 'Slovenia': 'SI',
+    'Spain': 'ES', 'Sweden': 'SE', 'Switzerland': 'CH', 'Turkey': 'TR',
+    'Ukraine': 'UA',
+    # CONMEBOL
+    'Argentina': 'AR', 'Bolivia': 'BO', 'Brazil': 'BR', 'Chile': 'CL',
+    'Colombia': 'CO', 'Ecuador': 'EC', 'Paraguay': 'PY', 'Peru': 'PE',
+    'Uruguay': 'UY', 'Venezuela': 'VE',
+    # CONCACAF
+    'Anguilla': 'AI', 'Antigua and Barbuda': 'AG', 'Aruba': 'AW',
+    'Bahamas': 'BS', 'Barbados': 'BB', 'Belize': 'BZ', 'Bermuda': 'BM',
+    'Bonaire': 'BQ', 'British Virgin Islands': 'VG', 'Canada': 'CA',
+    'Cayman Islands': 'KY', 'Costa Rica': 'CR', 'Cuba': 'CU', 'Curaçao': 'CW',
+    'Dominica': 'DM', 'Dominican Republic': 'DO', 'El Salvador': 'SV',
+    'Grenada': 'GD', 'Guatemala': 'GT', 'Guyana': 'GY', 'Haiti': 'HT',
+    'Honduras': 'HN', 'Jamaica': 'JM', 'Mexico': 'MX', 'Montserrat': 'MS',
+    'Nicaragua': 'NI', 'Panama': 'PA', 'Puerto Rico': 'PR',
+    'Saint Kitts and Nevis': 'KN', 'Saint Lucia': 'LC', 'Saint Martin': 'MF',
+    'Saint Vincent and the Grenadines': 'VC', 'Sint Maarten': 'SX',
+    'Suriname': 'SR', 'Trinidad and Tobago': 'TT',
+    'Turks and Caicos Islands': 'TC', 'United States': 'US',
+    'US Virgin Islands': 'VI', 'United States Virgin Islands': 'VI',
+    'French Guiana': 'GF', 'Guadeloupe': 'GP', 'Martinique': 'MQ',
+    # CAF
+    'Algeria': 'DZ', 'Angola': 'AO', 'Benin': 'BJ', 'Botswana': 'BW',
+    'Burkina Faso': 'BF', 'Burundi': 'BI', 'Cameroon': 'CM', 'Cape Verde': 'CV',
+    'Central African Republic': 'CF', 'Chad': 'TD', 'Comoros': 'KM',
+    'DR Congo': 'CD', 'Congo': 'CG', 'Djibouti': 'DJ', 'Egypt': 'EG',
+    'Equatorial Guinea': 'GQ', 'Eritrea': 'ER', 'Eswatini': 'SZ',
+    'Ethiopia': 'ET', 'Gabon': 'GA', 'Gambia': 'GM', 'Ghana': 'GH',
+    'Guinea': 'GN', 'Guinea-Bissau': 'GW', 'Ivory Coast': 'CI', 'Kenya': 'KE',
+    'Lesotho': 'LS', 'Liberia': 'LR', 'Libya': 'LY', 'Madagascar': 'MG',
+    'Malawi': 'MW', 'Mali': 'ML', 'Mauritania': 'MR', 'Mauritius': 'MU',
+    'Morocco': 'MA', 'Mozambique': 'MZ', 'Namibia': 'NA', 'Niger': 'NE',
+    'Nigeria': 'NG', 'Rwanda': 'RW', 'São Tomé and Príncipe': 'ST',
+    'Senegal': 'SN', 'Seychelles': 'SC', 'Sierra Leone': 'SL', 'Somalia': 'SO',
+    'South Africa': 'ZA', 'South Sudan': 'SS', 'Sudan': 'SD', 'Tanzania': 'TZ',
+    'Togo': 'TG', 'Tunisia': 'TN', 'Uganda': 'UG', 'Zambia': 'ZM',
+    'Zimbabwe': 'ZW', 'Zanzibar': '',  # Zanzibar — no flag emoji
+    # AFC
+    'Afghanistan': 'AF', 'Australia': 'AU', 'Bahrain': 'BH', 'Bangladesh': 'BD',
+    'Bhutan': 'BT', 'Brunei': 'BN', 'Cambodia': 'KH', 'China': 'CN',
+    'China PR': 'CN', 'Chinese Taipei': 'TW', 'Taiwan': 'TW', 'Guam': 'GU',
+    'Hong Kong': 'HK', 'India': 'IN', 'Indonesia': 'ID', 'Iran': 'IR',
+    'Iraq': 'IQ', 'Japan': 'JP', 'Jordan': 'JO', 'Kuwait': 'KW',
+    'Kyrgyzstan': 'KG', 'Laos': 'LA', 'Lebanon': 'LB', 'Macau': 'MO',
+    'Malaysia': 'MY', 'Maldives': 'MV', 'Mongolia': 'MN', 'Myanmar': 'MM',
+    'Nepal': 'NP', 'North Korea': 'KP', 'Northern Mariana Islands': 'MP',
+    'Oman': 'OM', 'Pakistan': 'PK', 'Palestine': 'PS', 'Philippines': 'PH',
+    'Qatar': 'QA', 'Saudi Arabia': 'SA', 'Singapore': 'SG', 'South Korea': 'KR',
+    'Sri Lanka': 'LK', 'Syria': 'SY', 'Tajikistan': 'TJ', 'Thailand': 'TH',
+    'Timor-Leste': 'TL', 'Turkmenistan': 'TM', 'United Arab Emirates': 'AE',
+    'Uzbekistan': 'UZ', 'Vietnam': 'VN', 'Yemen': 'YE', 'Yemen DPR': '',
+    # OFC
+    'American Samoa': 'AS', 'Cook Islands': 'CK', 'Fiji': 'FJ',
+    'New Caledonia': 'NC', 'New Zealand': 'NZ', 'Papua New Guinea': 'PG',
+    'Samoa': 'WS', 'Solomon Islands': 'SB', 'Tahiti': 'PF', 'Tonga': 'TO',
+    'Tuvalu': 'TV', 'Vanuatu': 'VU',
+}
+
+# UK constituent countries use special tag sequences
+_UK_FLAGS = {
+    'England':          '🏴\U000E0067\U000E0062\U000E0065\U000E006E\U000E0067\U000E007F',
+    'Scotland':         '🏴\U000E0067\U000E0062\U000E0073\U000E0063\U000E0074\U000E007F',
+    'Wales':            '🏴\U000E0067\U000E0062\U000E0077\U000E006C\U000E0073\U000E007F',
+    'Northern Ireland': '🇬🇧',  # No tag sequence; fall back to UK flag
+}
+
+# Defunct entities — no flag (intentional)
+_DEFUNCT = {
+    'Soviet Union', 'Yugoslavia', 'FR Yugoslavia', 'Serbia and Montenegro',
+    'Czechoslovakia', 'East Germany', 'West Germany', 'German DR',
+}
+
+
+def country_flag(country):
+    if country in _UK_FLAGS:
+        return _UK_FLAGS[country]
+    if country in _DEFUNCT:
+        return ''
+    code = _COUNTRY_TO_ISO.get(country)
+    if not code or len(code) != 2:
+        return ''
+    # Regional indicator: A = U+1F1E6
+    return chr(0x1F1E6 + ord(code[0]) - ord('A')) + chr(0x1F1E6 + ord(code[1]) - ord('A'))
+
+
+# Tournament name → short label (for honor badges)
+_TOURNAMENT_ABBREV = {
+    'FIFA World Cup':           'WC',
+    'UEFA Euro':                'Euro',
+    'Copa América':             'Copa',
+    'AFC Asian Cup':            'Asian Cup',
+    'UEFA Nations League':      'UNL',
+    'CONCACAF Nations League':  'CNL',
+}
+
+
+# Host country flags per tournament edition. Co-hosted = list of flags.
+# Empty list for editions without a single clear host (e.g. UEFA Euro 2020 pan-European).
+_TOURNAMENT_HOSTS = {
+    ('FIFA World Cup', 1982): ['Spain'],
+    ('FIFA World Cup', 1986): ['Mexico'],
+    ('FIFA World Cup', 1990): ['Italy'],
+    ('FIFA World Cup', 1994): ['United States'],
+    ('FIFA World Cup', 1998): ['France'],
+    ('FIFA World Cup', 2002): ['Japan', 'South Korea'],
+    ('FIFA World Cup', 2006): ['Germany'],
+    ('FIFA World Cup', 2010): ['South Africa'],
+    ('FIFA World Cup', 2014): ['Brazil'],
+    ('FIFA World Cup', 2018): ['Russia'],
+    ('FIFA World Cup', 2022): ['Qatar'],
+
+    ('UEFA Euro', 1980): ['Italy'],
+    ('UEFA Euro', 1984): ['France'],
+    ('UEFA Euro', 1988): ['Germany'],   # West Germany at the time
+    ('UEFA Euro', 1992): ['Sweden'],
+    ('UEFA Euro', 1996): ['England'],
+    ('UEFA Euro', 2000): ['Belgium', 'Netherlands'],
+    ('UEFA Euro', 2004): ['Portugal'],
+    ('UEFA Euro', 2008): ['Austria', 'Switzerland'],
+    ('UEFA Euro', 2012): ['Poland', 'Ukraine'],
+    ('UEFA Euro', 2016): ['France'],
+    ('UEFA Euro', 2020): [],  # Pan-European, 11 cities
+    ('UEFA Euro', 2024): ['Germany'],
+
+    ('Copa América', 1987): ['Argentina'],
+    ('Copa América', 1989): ['Brazil'],
+    ('Copa América', 1991): ['Chile'],
+    ('Copa América', 1993): ['Ecuador'],
+    ('Copa América', 1995): ['Uruguay'],
+    ('Copa América', 1997): ['Bolivia'],
+    ('Copa América', 1999): ['Paraguay'],
+    ('Copa América', 2001): ['Colombia'],
+    ('Copa América', 2004): ['Peru'],
+    ('Copa América', 2007): ['Venezuela'],
+    ('Copa América', 2011): ['Argentina'],
+    ('Copa América', 2015): ['Chile'],
+    ('Copa América', 2016): ['United States'],   # Centenario
+    ('Copa América', 2019): ['Brazil'],
+    ('Copa América', 2021): ['Brazil'],
+    ('Copa América', 2024): ['United States'],
+
+    ('AFC Asian Cup', 1980): ['Kuwait'],
+    ('AFC Asian Cup', 1984): ['Singapore'],
+    ('AFC Asian Cup', 1988): ['Qatar'],
+    ('AFC Asian Cup', 1992): ['Japan'],
+    ('AFC Asian Cup', 1996): ['United Arab Emirates'],
+    ('AFC Asian Cup', 2000): ['Lebanon'],
+    ('AFC Asian Cup', 2004): ['China PR'],
+    ('AFC Asian Cup', 2007): ['Indonesia', 'Malaysia', 'Thailand', 'Vietnam'],
+    ('AFC Asian Cup', 2011): ['Qatar'],
+    ('AFC Asian Cup', 2015): ['Australia'],
+    ('AFC Asian Cup', 2019): ['United Arab Emirates'],
+    ('AFC Asian Cup', 2024): ['Qatar'],
+}
+
+
+def host_flags(tournament, year):
+    hosts = _TOURNAMENT_HOSTS.get((tournament, int(year)), [])
+    return ''.join(country_flag(h) for h in hosts if country_flag(h))
+
+
+# Per-(country, year) → list of tournament finishes
+# Each entry: {tournament_short, finish} — used for honor badges with tournament context
+_country_year_finishes = {}
+for _, p in podiums.iterrows():
+    key = (p['team'], int(p['year']))
+    _country_year_finishes.setdefault(key, []).append({
+        'tournament': _TOURNAMENT_ABBREV.get(p['tournament'], p['tournament']),
+        'finish': int(p['finish']),
+    })
+# Sort each list: best finish first
+for key in _country_year_finishes:
+    _country_year_finishes[key].sort(key=lambda x: x['finish'])
+
+
+def country_year_finishes(country, year):
+    if pd.isna(year):
+        return []
+    return _country_year_finishes.get((country, int(year)), [])
+
+
 # is_end_of_season: rows where year is even AND it's the team's latest snapshot in that year
 # We compute this per team-year and tag the latest snapshot per even year.
 df['is_end_of_season'] = 0
@@ -55,14 +253,15 @@ standings_data = {
     'updated': latest_date,
     'teams': [
         {
-            'rank':              int(r['rank_blend']) if not pd.isna(r['rank_blend']) else None,
-            'team':              r['country'],
-            'confederation':     clean(r['confederation']),
-            'rating':            round(float(r['rating_blend']), 3) if not pd.isna(r['rating_blend']) else None,
-            'games_played':      int(r['games_played']) if not pd.isna(r['games_played']) else 0,
-            'last_match':        clean(r['last_match']),
-            'last_match_date':   clean(r['last_match_date']),
-            'tournament_finish': clean(r['tournament_finish']),
+            'rank':                int(r['rank_blend']) if not pd.isna(r['rank_blend']) else None,
+            'team':                r['country'],
+            'flag':                country_flag(r['country']),
+            'confederation':       clean(r['confederation']),
+            'rating':              round(float(r['rating_blend']), 3) if not pd.isna(r['rating_blend']) else None,
+            'games_played':        int(r['games_played']) if not pd.isna(r['games_played']) else 0,
+            'last_match':          clean(r['last_match']),
+            'last_match_date':     clean(r['last_match_date']),
+            'tournament_finishes': country_year_finishes(r['country'], r['year']),
         }
         for _, r in latest.iterrows()
     ],
@@ -84,12 +283,13 @@ eos_top = (
 goat_data = []
 for i, (_, r) in enumerate(eos_top.iterrows()):
     goat_data.append({
-        'rank':              i + 1,
-        'team':              r['country'],
-        'confederation':     clean(r['confederation']),
-        'season':            int(r['year']),
-        'rating':            round(float(r['rating_blend']), 3),
-        'tournament_finish': clean(r['tournament_finish']),
+        'rank':                i + 1,
+        'team':                r['country'],
+        'flag':                country_flag(r['country']),
+        'confederation':       clean(r['confederation']),
+        'season':              int(r['year']),
+        'rating':              round(float(r['rating_blend']), 3),
+        'tournament_finishes': country_year_finishes(r['country'], r['year']),
     })
 with open('docs/data/goat_teams.json', 'w') as f:
     json.dump(goat_data, f, separators=(',', ':'))
@@ -110,27 +310,29 @@ for team in all_teams:
 
     team_slug = slug(team)
     confed = clean(tdf['confederation'].iloc[-1])
-    teams_index.append({'name': team, 'confederation': confed, 'slug': team_slug})
+    flag = country_flag(team)
+    teams_index.append({'name': team, 'flag': flag, 'confederation': confed, 'slug': team_slug})
 
     seasons = {}
     for season, sdf in tdf.groupby('year'):
         if pd.isna(season):
             continue
+        finishes_for_year = country_year_finishes(team, season)
         seasons[int(season)] = [
             {
-                'date':              str(r['date']),
-                'rating':            round(float(r['rating_blend']), 3) if not pd.isna(r['rating_blend']) else None,
-                'rank':              int(r['rank_blend']) if not pd.isna(r['rank_blend']) else None,
-                'last_match':        clean(r['last_match']),
-                'is_end_of_season':  int(r['is_end_of_season']),
-                'is_game_day':       int(r['is_game_day']),
-                'tournament_finish': clean(r['tournament_finish']),
+                'date':                str(r['date']),
+                'rating':              round(float(r['rating_blend']), 3) if not pd.isna(r['rating_blend']) else None,
+                'rank':                int(r['rank_blend']) if not pd.isna(r['rank_blend']) else None,
+                'last_match':          clean(r['last_match']),
+                'is_end_of_season':    int(r['is_end_of_season']),
+                'is_game_day':         int(r['is_game_day']),
+                'tournament_finishes': finishes_for_year,
             }
             for _, r in sdf.sort_values('date').iterrows()
         ]
 
     with open(f'docs/data/teams/{team_slug}.json', 'w') as f:
-        json.dump({'team': team, 'confederation': confed, 'seasons': seasons},
+        json.dump({'team': team, 'flag': flag, 'confederation': confed, 'seasons': seasons},
                   f, separators=(',', ':'))
 
 teams_index.sort(key=lambda x: x['name'])
@@ -155,13 +357,14 @@ for season in all_seasons:
             label = 'World Cup Final Day'
         teams_snap = [
             {
-                'rank':              int(r['rank_blend']) if not pd.isna(r['rank_blend']) else None,
-                'team':              r['country'],
-                'confederation':     clean(r['confederation']),
-                'rating':            round(float(r['rating_blend']), 3) if not pd.isna(r['rating_blend']) else None,
-                'last_match':        clean(r['last_match']),
-                'last_match_date':   clean(r['last_match_date']),
-                'tournament_finish': clean(r['tournament_finish']),
+                'rank':                int(r['rank_blend']) if not pd.isna(r['rank_blend']) else None,
+                'team':                r['country'],
+                'flag':                country_flag(r['country']),
+                'confederation':       clean(r['confederation']),
+                'rating':              round(float(r['rating_blend']), 3) if not pd.isna(r['rating_blend']) else None,
+                'last_match':          clean(r['last_match']),
+                'last_match_date':     clean(r['last_match_date']),
+                'tournament_finishes': country_year_finishes(r['country'], r['year']),
             }
             for _, r in rdf.iterrows()
         ]
@@ -220,16 +423,18 @@ for tournament in sorted(podiums['tournament'].unique()):
             info = country_eos_info(team_name, year)
             return {
                 'team':          team_name,
+                'flag':          country_flag(team_name),
                 'confederation': info['confederation'],
                 'rating':        info['rating'],
                 'rank':          info['rank'],
             }
 
         entries.append({
-            'season':    int(year),
-            'champion':  team_block(first),
-            'runner_up': team_block(second),
-            'third':     team_block(third),
+            'season':     int(year),
+            'host_flags': host_flags(tournament, year),
+            'champion':   team_block(first),
+            'runner_up':  team_block(second),
+            'third':      team_block(third),
         })
     champions[tournament] = entries
 

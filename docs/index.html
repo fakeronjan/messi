@@ -182,6 +182,7 @@
   .finish-champion { background: #c8a84b; color: #1a6b8a; }
   .finish-runner   { background: #ddd; color: #444; }
   .finish-leader   { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+  .finish-bronze   { background: #cd7f32; color: #fff; }
 
   .last-match-cell {
     font-size: 12px;
@@ -361,12 +362,15 @@ function confederationBadge(confed) {
   return `<span class="league-badge ${cls}">${short}</span>`;
 }
 
-function finishBadge(finish) {
-  // tournament_finish: '1st' / '2nd' / '3rd' / '' (best podium across all tournaments that year)
-  if (finish === '1st') return `<span title="Tournament Champion" style="font-size:14px">🏆</span>`;
-  if (finish === '2nd') return `<span title="Tournament Runner-Up" style="font-size:14px">🥈</span>`;
-  if (finish === '3rd') return `<span title="Tournament 3rd Place" style="font-size:14px">🥉</span>`;
-  return '';
+function finishBadge(finishes) {
+  // finishes: list of {tournament, finish} where tournament is short label (WC, Euro, Copa, etc.)
+  // Renders ZIDANE-style colored pills, e.g. "WC 🏆", "Euro 🥈", "Copa 🥉"
+  if (!finishes || !finishes.length) return '';
+  const cls = (f) => f === 1 ? 'finish-champion' : (f === 2 ? 'finish-runner' : 'finish-bronze');
+  const medal = (f) => f === 1 ? '🏆' : (f === 2 ? '🥈' : '🥉');
+  return finishes.map(x =>
+    `<span class="finish-badge ${cls(x.finish)}">${x.tournament} ${medal(x.finish)}</span>`
+  ).join(' ');
 }
 
 function resultClass(match) {
@@ -482,14 +486,14 @@ function renderStandings() {
     return `<tr>
       <td class="rank-cell">${t.rank != null ? t.rank : '—'}</td>
       <td class="rank-cell col-hide-mobile">${cRank}</td>
-      <td class="team-cell">${t.team}</td>
+      <td class="team-cell"><span style="margin-right:4px">${t.flag || ''}</span>${t.team}</td>
       <td>${confederationBadge(t.confederation)}</td>
       <td>${ratingBar(t.rating)}</td>
       <td class="last-match-cell">
         <span class="${resultClass(t.last_match)}">${t.last_match || '—'}</span>
       </td>
       <td class="col-hide-mobile" style="font-size:11px;color:#888;white-space:nowrap">${t.last_match_date || ''}</td>
-      <td class="col-hide-mobile" style="font-size:11px;text-align:center">${finishBadge(t.tournament_finish)}</td>
+      <td class="col-hide-mobile" style="font-size:11px">${finishBadge(t.tournament_finishes)}</td>
     </tr>`;
   }).join('');
 
@@ -531,7 +535,7 @@ function populateTeams(confederation) {
   teamsIndex.filter(t => t.confederation === confederation).forEach(t => {
     const opt = document.createElement('option');
     opt.value = t.slug;
-    opt.textContent = t.name;
+    opt.textContent = t.flag ? `${t.flag} ${t.name}` : t.name;
     sel.appendChild(opt);
   });
   sel.disabled = false;
@@ -601,7 +605,7 @@ function renderTeamTable() {
     </td>
     <td>${ratingBar(g.rating)}</td>
     <td class="rank-cell">${g.rank}</td>
-    <td class="col-hide-mobile" style="font-size:11px;text-align:center">${finishBadge(g.tournament_finish)}</td>
+    <td class="col-hide-mobile" style="font-size:11px">${finishBadge(g.tournament_finishes)}</td>
   </tr>`).join('');
 
   document.getElementById('team-table-wrap').innerHTML = `
@@ -625,7 +629,7 @@ function drawChart(rows, seasonFilter) {
   const H = 180;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
 
-  const CHART_MIN = -2.5, CHART_MAX = 2.5;
+  const CHART_MIN = -4, CHART_MAX = 4;
   const CTOP = 10, CBOT = 152;   // chart area; 152..178 reserved for x-axis
 
   const px = (i) => (i / (rows.length - 1)) * (W - 20) + 10;
@@ -710,18 +714,23 @@ function renderLeagueHistory(league) {
       : '';
     return `
       <td class="${bg} team-cell" style="white-space:nowrap">
-        <span style="margin-right:4px">${medalEmoji}</span>${t.team}${titleStr}
+        <span style="margin-right:4px">${medalEmoji}</span><span style="margin-right:4px">${t.flag || ''}</span>${t.team}${titleStr}
       </td>
       <td class="${bg} col-hide-mobile" style="font-variant-numeric:tabular-nums;white-space:nowrap;color:#888;font-size:0.85em">${rank}</td>
       <td class="${bg} rating-cell" style="font-variant-numeric:tabular-nums">${rating}</td>`;
   }
 
-  const rows = entries.map(e => `<tr>
-    <td class="season-cell">${e.season}</td>
+  const rows = entries.map(e => {
+    const hostStr = e.host_flags
+      ? ` <span style="font-size:0.85em">${e.host_flags}</span>`
+      : '';
+    return `<tr>
+    <td class="season-cell" style="white-space:nowrap">${e.season}${hostStr}</td>
     ${teamCell(e.champion,  'col-champ', '🏆')}
     ${teamCell(e.runner_up, 'col-ru',    '🥈')}
     ${teamCell(e.third,     'col-ru',    '🥉')}
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
 
   document.getElementById('history-table-wrap').innerHTML = `
     <table>
@@ -766,10 +775,10 @@ function renderGoat() {
   const rows = teams.map(t => `<tr>
     <td class="rank-cell">${displayRank++}</td>
     <td style="text-align:center;white-space:nowrap">${t.season}</td>
-    <td class="team-cell">${t.team}</td>
+    <td class="team-cell"><span style="margin-right:4px">${t.flag || ''}</span>${t.team}</td>
     <td>${confederationBadge(t.confederation)}</td>
     <td>${ratingBar(t.rating)}</td>
-    <td class="col-hide-mobile" style="font-size:11px;text-align:center">${finishBadge(t.tournament_finish)}</td>
+    <td class="col-hide-mobile" style="font-size:11px">${finishBadge(t.tournament_finishes)}</td>
   </tr>`).join('');
 
   document.getElementById('goat-table-wrap').innerHTML = `
