@@ -6,6 +6,11 @@
 
 import pandas as pd
 import numpy as np
+# rankit==0.2 uses deprecated numpy aliases (np.int, np.float, np.bool) removed in numpy 1.24+.
+# Restore them before rankit import so the Massey solver works.
+if not hasattr(np, 'int'):   np.int = int
+if not hasattr(np, 'float'): np.float = float
+if not hasattr(np, 'bool'):  np.bool = bool
 from datetime import datetime, timedelta
 import warnings
 warnings.filterwarnings('ignore')
@@ -18,9 +23,14 @@ from rankit.Ranker import MasseyRanker
 # ============================================================
 
 start_date         = '1980-01-01'   # first date to include in dataset
-window_days        = 1461           # 4-year rolling window (365 * 4 + 1 leap day)
+window_game_days   = 200            # rolling game-day window (matches ZIDANE architecture)
 margin_cap         = 5              # max goal margin fed into Massey
 shootout_margin    = 0.5            # margin assigned to a shootout win (AET level, shootout decides)
+min_games          = 5              # minimum games in window for a team to appear in output
+                                    # (15 was too strict for international play — Germany 2014 had 14 competitive
+                                    #  games in window and got filtered. Mexico 1990 type artifacts are already
+                                    #  filtered naturally by the Massey solver since they have no games in window.)
+friendly_weight    = 0.75           # MESSI2 only: weight for friendlies vs competitive games
 data_url           = 'https://raw.githubusercontent.com/martj42/international_results/master/results.csv'
 shootouts_url      = 'https://raw.githubusercontent.com/martj42/international_results/master/shootouts.csv'
 
@@ -294,10 +304,13 @@ df['adj_margin_away'] = -df['adj_margin_home']
 # ============================================================
 # STEP 4b - TOURNAMENT WEIGHTS
 # ============================================================
-# Assign importance multiplier per game based on tournament tier.
-# This is applied in the Massey loop alongside the recency weight.
+# REMOVED: tournament weights (WC 1.5x, continental 1.25x) created persistence
+# distortion — a 4-year window means tournament-weighted games dominated team
+# ratings long after the tournament ended (e.g., Mexico 1990 inflated by
+# 1986 host-nation WC games carrying 1.5x weight). MESSI now matches ZIDANE's
+# architecture: all competitive games at weight 1.0, let the network speak.
 
-df['tournament_weight'] = df['tournament'].map(TOURNAMENT_WEIGHTS).fillna(1.0)
+df['tournament_weight'] = 1.0
 
 # ============================================================
 # STEP 5 - WINS FOR STANDINGS
@@ -430,33 +443,32 @@ for i in range(min_date_id, max_date_id + 1):
     if min_date_id_ranked <= i <= max_date_id_ranked:
         continue
 
-    # Slice the rolling 4-year window using actual calendar dates
+    # Slice the rolling game-day window (matches ZIDANE architecture)
     current_date = df.loc[df['grouped_date_id'] == i, 'date'].max()
-    window_start = current_date - pd.Timedelta(days=window_days - 1)
 
     working_df = df.loc[
-        (df['date'] >= window_start) &
-        (df['date'] <= current_date)
+        (df['grouped_date_id'] >= i - window_game_days + 1) &
+        (df['grouped_date_id'] <= i)
     ].copy()
 
     if len(working_df) < 10:
         # Not enough data to produce meaningful ratings yet
         continue
 
-    # Linear recency weight based on actual calendar days:
-    # oldest day in window → near 0, most recent day → 1.0
-    working_df['days_ago'] = (current_date - working_df['date']).dt.days
-    working_df['date_weight'] = 1 - (working_df['days_ago'] / window_days)
+    # Linear recency weight by game-days: oldest in window → near 0, most recent → 1.0
+    working_df['game_days_ago'] = i - working_df['grouped_date_id']
+    working_df['date_weight'] = 1 - (working_df['game_days_ago'] / window_game_days)
 
-    # Scale margins by recency weight AND tournament weight
-    # Both factors compose multiplicatively — a recent World Cup game
-    # gets maximum influence, an old qualifying game gets minimum
+    # Scale margins by recency weight only — no tournament weight (see STEP 4b)
     working_df['weighted_margin_home'] = (
         working_df['adj_margin_home'] *
-        working_df['date_weight'] *
-        working_df['tournament_weight']
+        working_df['date_weight']
     )
     working_df['weighted_margin_away'] = -working_df['weighted_margin_home']
+    # Drop zero-weighted rows to avoid Massey solver issues
+    working_df = working_df[working_df['weighted_margin_home'] != 0]
+    if len(working_df) < 10:
+        continue
 
     season = current_date.year
 
@@ -543,9 +555,13 @@ df2['hfa'] = np.where(df2['neutral'] == True, 0, home_field_advantage)
 df2['adj_margin_home'] = df2['margin_home'] - df2['hfa']
 df2['adj_margin_away'] = -df2['adj_margin_home']
 
-# Tournament weights: competitive tournaments keep MESSI1 weights,
-# everything else (friendlies/invitationals) gets 0.75x base weight
-df2['tournament_weight'] = df2['tournament'].map(TOURNAMENT_WEIGHTS).fillna(0.75)
+# MESSI2 weights: competitive games at 1.0x, friendlies/invitationals at friendly_weight (0.75x).
+# All competitive tiers (WC, continental, qualifying) treated equally — let the network speak.
+df2['tournament_weight'] = np.where(
+    df2['tournament'].isin(COMPETITIVE_TOURNAMENTS),
+    1.0,
+    friendly_weight
+)
 
 df2['date'] = pd.to_datetime(df2['date'])
 df2.sort_values('date', inplace=True)
@@ -579,18 +595,17 @@ for i in range(min_date_id, max_date_id2 + 1):
     current_date2 = df2.loc[df2['grouped_date_id'] == i, 'date'].max()
     if pd.isnull(current_date2) or len(df2.loc[df2['grouped_date_id'] == i]) == 0:
         continue
-    window_start2 = current_date2 - pd.Timedelta(days=window_days - 1)
 
     working2_df = df2.loc[
-        (df2['date'] >= window_start2) &
-        (df2['date'] <= current_date2)
+        (df2['grouped_date_id'] >= i - window_game_days + 1) &
+        (df2['grouped_date_id'] <= i)
     ].copy()
 
     if len(working2_df) < 10:
         continue
 
-    working2_df['days_ago'] = (current_date2 - working2_df['date']).dt.days
-    working2_df['date_weight'] = 1 - (working2_df['days_ago'] / window_days)
+    working2_df['game_days_ago'] = i - working2_df['grouped_date_id']
+    working2_df['date_weight']   = 1 - (working2_df['game_days_ago'] / window_game_days)
 
     working2_df['weighted_margin_home'] = (
         working2_df['adj_margin_home'] *
@@ -629,6 +644,16 @@ for i in range(min_date_id, max_date_id2 + 1):
         ranked2['ranking_date'] = current_date2.date()
         ranked2['season']       = season2
 
+        # Games played in the rolling window for each team (used for min_games filter)
+        home_gp2 = working2_df.groupby('home_team').size().reset_index(name='gp_home')
+        away_gp2 = working2_df.groupby('away_team').size().reset_index(name='gp_away')
+        home_gp2.columns = ['name', 'gp_home']
+        away_gp2.columns = ['name', 'gp_away']
+        gp2 = pd.merge(home_gp2, away_gp2, on='name', how='outer').fillna(0)
+        gp2['games_played2'] = (gp2['gp_home'] + gp2['gp_away']).astype(int)
+        ranked2 = pd.merge(ranked2, gp2[['name', 'games_played2']], on='name', how='left')
+        ranked2['games_played2'] = ranked2['games_played2'].fillna(0).astype(int)
+
         messi2_df = pd.concat([messi2_df, ranked2], axis=0, sort=False).reset_index(drop=True)
 
     except Exception as e:
@@ -642,6 +667,134 @@ messi2_df.rename(columns={'rating': 'rating2', 'rank': 'rank2'}, inplace=True)
 
 messi2_df.to_csv('messi2_ratings.csv.gz', index=False)
 print("messi2_ratings.csv.gz saved!")
+
+# ============================================================
+# STEP 8d - BUILD MESSI3 DATASET (FIFA World Cup ONLY — qualifying + finals)
+# ============================================================
+# MESSI3 isolates the highest-stakes tournament: just WC qualifying + WC finals.
+# Sparser data per team but cleanest signal of "who actually performs at the World Cup level."
+
+WC_TOURNAMENTS = {'FIFA World Cup', 'FIFA World Cup qualification'}
+
+df3 = raw_df[
+    (raw_df['date'] >= pd.to_datetime(start_date)) &
+    (raw_df['tournament'].isin(WC_TOURNAMENTS))
+].copy()
+
+print(f"MESSI3 (WC only) dataset: {len(df3)} rows")
+
+df3 = pd.merge(df3, shootouts_df, on=['date', 'home_team', 'away_team'], how='left')
+df3['raw_margin_home'] = df3['home_score'] - df3['away_score']
+df3['raw_margin_away'] = -df3['raw_margin_home']
+shootout_mask3 = (df3['shootout_winner'].notna() & (df3['raw_margin_home'] == 0))
+df3['margin_home'] = df3['raw_margin_home']
+df3['margin_away'] = df3['raw_margin_away']
+df3.loc[shootout_mask3 & (df3['shootout_winner'] == df3['home_team']), 'margin_home'] =  shootout_margin
+df3.loc[shootout_mask3 & (df3['shootout_winner'] == df3['home_team']), 'margin_away'] = -shootout_margin
+df3.loc[shootout_mask3 & (df3['shootout_winner'] == df3['away_team']), 'margin_home'] = -shootout_margin
+df3.loc[shootout_mask3 & (df3['shootout_winner'] == df3['away_team']), 'margin_away'] =  shootout_margin
+
+df3['margin_home'] = df3['margin_home'].clip(-margin_cap, margin_cap)
+df3['margin_away'] = -df3['margin_home']
+df3['hfa'] = np.where(df3['neutral'] == True, 0, home_field_advantage)
+df3['adj_margin_home'] = df3['margin_home'] - df3['hfa']
+df3['adj_margin_away'] = -df3['adj_margin_home']
+
+df3['date'] = pd.to_datetime(df3['date'])
+df3.sort_values('date', inplace=True)
+df3.reset_index(drop=True, inplace=True)
+df3['grouped_date_id'] = df3.groupby('date').ngroup() + 1
+
+# ============================================================
+# STEP 8e - ROLLING MASSEY RATINGS (MESSI3)
+# ============================================================
+
+print("Starting MESSI3 (WC-only) rating calculations...")
+
+max_date_id3 = int(df3['grouped_date_id'].max())
+
+try:
+    messi3_df = pd.read_csv('messi3_ratings.csv')
+    max_date_id3_ranked = int(messi3_df['ranking_id'].max())
+    min_date_id3_ranked = int(messi3_df['ranking_id'].min())
+    print(f"Existing MESSI3 ratings found. Ranked IDs: {min_date_id3_ranked} to {max_date_id3_ranked}")
+except FileNotFoundError:
+    messi3_df = pd.DataFrame(columns=['ranking_id', 'ranking_date', 'season', 'name', 'rating', 'rank'])
+    max_date_id3_ranked = -1
+    min_date_id3_ranked = -1
+    print("No existing MESSI3 ratings found - running full history from scratch.")
+
+last_printed_ym3 = None
+for i in range(1, max_date_id3 + 1):
+
+    if min_date_id3_ranked <= i <= max_date_id3_ranked:
+        continue
+
+    current_date3 = df3.loc[df3['grouped_date_id'] == i, 'date'].max()
+    if pd.isnull(current_date3):
+        continue
+
+    working3_df = df3.loc[
+        (df3['grouped_date_id'] >= i - window_game_days + 1) &
+        (df3['grouped_date_id'] <= i)
+    ].copy()
+
+    if len(working3_df) < 10:
+        continue
+
+    working3_df['game_days_ago'] = i - working3_df['grouped_date_id']
+    working3_df['date_weight']   = 1 - (working3_df['game_days_ago'] / window_game_days)
+    working3_df['weighted_margin_home'] = working3_df['adj_margin_home'] * working3_df['date_weight']
+    working3_df['weighted_margin_away'] = -working3_df['weighted_margin_home']
+
+    working3_df = working3_df[working3_df['weighted_margin_home'] != 0]
+    if len(working3_df) < 10:
+        continue
+
+    season3 = current_date3.year
+    current_ym3 = current_date3.strftime('%Y-%m')
+    if current_ym3 != last_printed_ym3:
+        pct3 = round(100 * i / max_date_id3)
+        print(f"  MESSI3: {current_date3.strftime('%B %Y')} ({pct3}% complete)")
+        last_printed_ym3 = current_ym3
+
+    try:
+        soccer_table3 = Table(
+            working3_df,
+            ['home_team', 'away_team', 'weighted_margin_home', 'weighted_margin_away']
+        )
+        messi3_massey = MasseyRanker(soccer_table3)
+        ranked3 = messi3_massey.rank()
+
+        if ranked3['rating'].isna().any() or np.isinf(ranked3['rating']).any():
+            continue
+
+        ranked3['ranking_id']   = i
+        ranked3['ranking_date'] = current_date3.date()
+        ranked3['season']       = season3
+
+        home_gp3 = working3_df.groupby('home_team').size().reset_index(name='gp_home')
+        away_gp3 = working3_df.groupby('away_team').size().reset_index(name='gp_away')
+        home_gp3.columns = ['name', 'gp_home']
+        away_gp3.columns = ['name', 'gp_away']
+        gp3 = pd.merge(home_gp3, away_gp3, on='name', how='outer').fillna(0)
+        gp3['games_played3'] = (gp3['gp_home'] + gp3['gp_away']).astype(int)
+        ranked3 = pd.merge(ranked3, gp3[['name', 'games_played3']], on='name', how='left')
+        ranked3['games_played3'] = ranked3['games_played3'].fillna(0).astype(int)
+
+        messi3_df = pd.concat([messi3_df, ranked3], axis=0, sort=False).reset_index(drop=True)
+
+    except Exception as e:
+        print(f"  MESSI3: skipping date ID {i} due to solver error: {e}")
+        continue
+
+messi3_df.sort_values(['ranking_id', 'name'], ascending=[True, True], inplace=True)
+messi3_df.drop_duplicates(subset=None, keep='first', inplace=True)
+messi3_df['ranking_date'] = pd.to_datetime(messi3_df['ranking_date']).dt.date
+messi3_df.rename(columns={'rating': 'rating3', 'rank': 'rank3'}, inplace=True)
+
+messi3_df.to_csv('messi3_ratings.csv', index=False)
+print("messi3_ratings.csv saved!")
 
 # ============================================================
 # STEP 9 - TOURNAMENT PODIUM FLAGS
@@ -759,9 +912,35 @@ final_df = messi_df.copy()
 final_df.rename(columns={'ranking_date': 'date'}, inplace=True)
 final_df['year'] = final_df['season'].fillna(0).astype(int)
 
-# Merge MESSI2 ratings
-messi2_slim = messi2_df[['ranking_id', 'name', 'rating2', 'rank2']].copy()
-final_df = pd.merge(final_df, messi2_slim, on=['ranking_id', 'name'], how='left')
+# Merge MESSI2 and MESSI3 ratings via merge_asof on (date, name).
+# Each model has its OWN ranking_id sequence (different game-day sets), so
+# merging by ranking_id is incorrect. merge_asof forward-fills the most
+# recent prior MESSI2/MESSI3 rating onto each MESSI1 snapshot date.
+final_df['date'] = pd.to_datetime(final_df['date'])
+
+messi2_slim = messi2_df[['ranking_date', 'name', 'rating2', 'rank2', 'games_played2']].copy()
+messi2_slim['ranking_date'] = pd.to_datetime(messi2_slim['ranking_date'])
+messi2_slim = messi2_slim.sort_values('ranking_date')
+
+messi3_slim = messi3_df[['ranking_date', 'name', 'rating3', 'rank3', 'games_played3']].copy()
+messi3_slim['ranking_date'] = pd.to_datetime(messi3_slim['ranking_date'])
+messi3_slim = messi3_slim.sort_values('ranking_date')
+
+final_df = final_df.sort_values('date')
+
+final_df = pd.merge_asof(
+    final_df, messi2_slim,
+    left_on='date', right_on='ranking_date',
+    by='name', direction='backward',
+)
+final_df.drop(columns=['ranking_date'], inplace=True)
+
+final_df = pd.merge_asof(
+    final_df, messi3_slim,
+    left_on='date', right_on='ranking_date',
+    by='name', direction='backward',
+)
+final_df.drop(columns=['ranking_date'], inplace=True)
 
 # Add confederation (must happen before name is renamed to country)
 final_df['confederation'] = final_df['name'].map(CONFEDERATION_MAP).fillna('Unknown')
@@ -801,7 +980,14 @@ final_df.rename(columns={'name': 'country'}, inplace=True)
 # MESSI1 is scaled by 0.65 to account for its higher absolute values
 # (result of tournament up-weighting and smaller network) before blending
 # Effective weight: 75% MESSI1 signal, 25% MESSI2 signal on comparable scales
-final_df['rating_blend'] = (final_df['rating'] * 0.65 * 0.75) + (final_df['rating2'] * 0.25)
+# Z-score normalized blend: each model standardized within its snapshot first,
+# then equal-weighted averaged. Standardization makes the three models
+# scale-comparable so no single model's outliers (e.g. MESSI3 Cuba 1996) dominate.
+for _col in ('rating', 'rating2', 'rating3'):
+    grp = final_df.groupby('ranking_id')[_col]
+    final_df[_col + '_z'] = (final_df[_col] - grp.transform('mean')) / grp.transform('std')
+
+final_df['rating_blend'] = final_df[['rating_z', 'rating2_z', 'rating3_z']].mean(axis=1, skipna=True)
 final_df['rank_blend'] = (
     final_df[final_df['rating_blend'].notna()]
     .groupby('ranking_id')['rating_blend']
@@ -850,7 +1036,10 @@ final_df['is_world_cup_final_day'] = np.where(
 # Final column order
 final_df = final_df[[
     'ranking_id', 'date', 'year', 'country',
-    'confederation', 'rating', 'rank', 'rating2', 'rank2',
+    'confederation',
+    'rating',  'rank',                                           # MESSI1 (competitive)
+    'rating2', 'rank2',                                          # MESSI2 (all matches)
+    'rating3', 'rank3',                                          # MESSI3 (WC qualifying + finals only)
     'rating_blend', 'rank_blend',
     'games_played',
     'last_match_date', 'last_match', 'is_game_day',
@@ -863,6 +1052,12 @@ final_df.drop_duplicates(keep='first', inplace=True)
 
 # Filter out pre-1986 data — insufficient network density for reliable ratings
 final_df = final_df[final_df['date'] >= pd.to_datetime('1986-01-01').date()]
+
+# min_games filter — drop teams with fewer than min_games competitive games in window.
+# Mirrors ZIDANE: prevents stale ratings from inactive/banned teams from showing up
+# (e.g., Mexico 1990 — banned, no games in 1990 but old games still in calendar window).
+final_df = final_df[final_df['games_played'] >= min_games]
+print(f"After min_games={min_games} filter: {len(final_df)} rows")
 
 final_df.to_csv('messi_ratings_final.csv', index=False)
 print("messi_ratings_final.csv saved!")
