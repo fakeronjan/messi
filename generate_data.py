@@ -438,15 +438,76 @@ for tournament in sorted(podiums['tournament'].unique()):
         })
     champions[tournament] = entries
 
-# Running championship counts per tournament (1st place only)
-# Plus "all-tournaments" total per team
+# Pre-data tournament finishes — seed running counters with results from
+# editions before our rated dataset begins (FIFA WC 1930-1978 not in our data,
+# Euro 1960-1976, etc.). Keys use team names as they appear in our data.
+# Defunct teams (Soviet Union, Yugoslavia, etc.) get seeded too — they just
+# never accumulate further counts since they don't appear in post-data entries.
+PRE_DATA_TOURNAMENT_COUNTS = {
+    'FIFA World Cup': {
+        'champion': {  # 1930-1978
+            'Brazil': 3, 'Italy': 2, 'West Germany': 2, 'Uruguay': 2,
+            'Argentina': 1, 'England': 1,
+        },
+        'runner_up': {
+            'Hungary': 2, 'Czechoslovakia': 2, 'Netherlands': 2,
+            'Argentina': 1, 'Brazil': 1, 'Sweden': 1, 'West Germany': 1, 'Italy': 1,
+        },
+        'third': {
+            'Brazil': 2,
+            'United States': 1, 'Sweden': 1, 'Austria': 1, 'France': 1,
+            'Chile': 1, 'Portugal': 1, 'West Germany': 1, 'Poland': 1,
+        },
+    },
+    'UEFA Euro': {
+        'champion': {  # 1960-1976
+            'Spain': 1, 'Italy': 1, 'West Germany': 1, 'Soviet Union': 1, 'Czechoslovakia': 1,
+        },
+        'runner_up': {
+            'Yugoslavia': 2, 'Soviet Union': 2, 'West Germany': 1,
+        },
+        'third': {  # 3rd place playoffs existed 1960-1980
+            'Czechoslovakia': 1, 'Hungary': 1, 'England': 1, 'Belgium': 1, 'Netherlands': 1,
+        },
+    },
+    'Copa América': {
+        'champion': {  # 1916-1983 (16 editions of varying frequency)
+            'Uruguay': 13, 'Argentina': 12, 'Brazil': 3, 'Paraguay': 2, 'Peru': 2, 'Bolivia': 1,
+        },
+        # Runner-ups and 3rd places not seeded — sparse pre-1987 records
+    },
+    'AFC Asian Cup': {
+        'champion': {  # 1956-1976
+            'Iran': 3, 'South Korea': 2, 'Israel': 1,
+        },
+        'runner_up': {
+            'Israel': 2, 'India': 1, 'Myanmar': 1, 'South Korea': 1, 'Kuwait': 1,
+        },
+        # 3rd places pre-1980 not seeded
+    },
+    # Nations Leagues started in 2018/2019 — no pre-data history
+}
+
+
+# Running counts per tournament (champion / runner-up / third), seeded with pre-data totals
 for tournament, entries in champions.items():
-    counts = {}
+    seeds = PRE_DATA_TOURNAMENT_COUNTS.get(tournament, {})
+    champ_counts = dict(seeds.get('champion', {}))
+    ru_counts    = dict(seeds.get('runner_up', {}))
+    third_counts = dict(seeds.get('third', {}))
     for entry in reversed(entries):
         if entry['champion']:
             ct = entry['champion']['team']
-            counts[ct] = counts.get(ct, 0) + 1
-            entry['champion']['title_count'] = counts[ct]
+            champ_counts[ct] = champ_counts.get(ct, 0) + 1
+            entry['champion']['title_count'] = champ_counts[ct]
+        if entry['runner_up']:
+            rt = entry['runner_up']['team']
+            ru_counts[rt] = ru_counts.get(rt, 0) + 1
+            entry['runner_up']['runner_up_count'] = ru_counts[rt]
+        if entry['third']:
+            tt = entry['third']['team']
+            third_counts[tt] = third_counts.get(tt, 0) + 1
+            entry['third']['third_count'] = third_counts[tt]
 
 with open('docs/data/champions.json', 'w') as f:
     json.dump(champions, f, separators=(',', ':'))

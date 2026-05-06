@@ -241,7 +241,7 @@
 <body>
 
 <header>
-  <h1>MESSI 🌍</h1>
+  <h1>MESSI 🌍⚽</h1>
   <p class="subtitle">International Soccer Power Rankings</p>
   <p class="updated" id="last-updated">Loading...</p>
 </header>
@@ -285,7 +285,7 @@
       <option value="OFC">🌏 OFC</option>
     </select>
     <select id="team-select" disabled><option value="">— Select a country —</option></select>
-    <select id="season-select"><option value="all">All Seasons</option></select>
+    <select id="season-select"><option value="all">All Years</option></select>
     <select id="date-type-select">
       <option value="all">All dates</option>
       <option value="eos">End of season</option>
@@ -709,12 +709,13 @@ function renderLeagueHistory(league) {
     if (!t) return `<td class="${bg}" colspan="3" style="text-align:center;color:#aaa">—</td>`;
     const rating  = t.rating != null ? t.rating.toFixed(2) : '—';
     const rank    = t.rank   != null ? `#${t.rank}` : '—';
-    const titleStr = t.title_count
-      ? ` <span style="color:#888;font-size:0.85em;font-weight:400">(${t.title_count} 🏆)</span>`
-      : '';
+    let countStr = '';
+    if (t.title_count) countStr = ` <span style="color:#888;font-size:0.85em;font-weight:400">(${t.title_count} 🏆)</span>`;
+    else if (t.runner_up_count) countStr = ` <span style="color:#888;font-size:0.85em;font-weight:400">(${t.runner_up_count} 🥈)</span>`;
+    else if (t.third_count) countStr = ` <span style="color:#888;font-size:0.85em;font-weight:400">(${t.third_count} 🥉)</span>`;
     return `
       <td class="${bg} team-cell" style="white-space:nowrap">
-        <span style="margin-right:4px">${medalEmoji}</span><span style="margin-right:4px">${t.flag || ''}</span>${t.team}${titleStr}
+        <span style="margin-right:4px">${medalEmoji}</span><span style="margin-right:4px">${t.flag || ''}</span>${t.team}${countStr}
       </td>
       <td class="${bg} col-hide-mobile" style="font-variant-numeric:tabular-nums;white-space:nowrap;color:#888;font-size:0.85em">${rank}</td>
       <td class="${bg} rating-cell" style="font-variant-numeric:tabular-nums">${rating}</td>`;
