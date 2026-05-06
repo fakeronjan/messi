@@ -233,14 +233,27 @@ def country_year_finishes(country, year):
     return _country_year_finishes.get((country, int(year)), [])
 
 
-# is_end_of_season: rows where year is even AND it's the team's latest snapshot in that year
-# We compute this per team-year and tag the latest snapshot per even year.
-df['is_end_of_season'] = 0
-even_year_mask = (df['year'] % 2 == 0)
-even_df = df[even_year_mask].copy()
-# For each (country, year), find the max ranking_id (latest snapshot in that year)
-year_max_id = even_df.groupby(['country', 'year'])['ranking_id'].transform('max')
-df.loc[even_year_mask, 'is_end_of_season'] = (even_df['ranking_id'] == year_max_id).astype(int).values
+# is_end_of_season: rows whose snapshot date falls on the LAST DAY of a major tournament.
+# Captures each team's rating at peak tournament moments (WC final day, Euro final day, etc.)
+# rather than fading-into-year-end snapshots after late-year friendlies.
+PODIUM_TOURNAMENTS = [
+    'FIFA World Cup',
+    'UEFA Euro',
+    'Copa América',
+    'AFC Asian Cup',
+    'UEFA Nations League',
+    'CONCACAF Nations League',
+]
+_tournament_final_dates = set()
+for _t in PODIUM_TOURNAMENTS:
+    _tg = games[games['tournament'] == _t]
+    if _tg.empty:
+        continue
+    for _year, _grp in _tg.groupby(_tg['date'].apply(lambda d: d.year)):
+        _tournament_final_dates.add(_grp['date'].max())
+
+df['is_end_of_season'] = df['date'].apply(lambda d: 1 if d in _tournament_final_dates else 0)
+print(f"Tournament-end snapshot dates: {len(_tournament_final_dates)}")
 
 
 # ── 1. Current standings ─────────────────────────────────────────────────────
@@ -269,13 +282,15 @@ standings_data = {
 with open('docs/data/current_standings.json', 'w') as f:
     json.dump(standings_data, f, separators=(',', ':'))
 
-# ── 2. GOAT table (top 50 country-year ratings at end of even years) ─────────
+# ── 2. GOAT table (top 50 country-year ratings at end of major tournaments) ─
 print("Writing goat_teams.json...")
 eos_all = df[df['is_end_of_season'] == 1].copy()
-# Per country-year, take just one row (the EOS marker)
+# Each (country, year) might have multiple tournament-end snapshots in same year
+# (e.g. 2024 had Euro + Copa). Keep each country's BEST rating per year, then take top 50.
 eos_top = (
     eos_all.dropna(subset=['rating_blend'])
     .sort_values('rating_blend', ascending=False)
+    .drop_duplicates(subset=['country', 'year'], keep='first')
     .head(50)
     .reset_index(drop=True)
 )
