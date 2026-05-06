@@ -1,0 +1,7 @@
+.DS_Store
+__pycache__/
+*.pyc
+Backup*/
+messi_diag.py
+# Final assembled file is regenerated from intermediates each run (148MB, exceeds GitHub's 100MB limit)
+messi_ratings_final.csv
