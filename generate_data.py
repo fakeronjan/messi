@@ -403,24 +403,36 @@ with open('docs/data/seasons_index.json', 'w') as f:
 # ── 5. Champions table (per tournament) ──────────────────────────────────────
 print("Writing champions.json...")
 
-# Lookup country's rating + rank as of the latest snapshot in their tournament year.
-# Build a (country, year) → (rating, rank) map.
-year_eos = (
-    df[df['is_end_of_season'] == 1]
-    .groupby(['country', 'year'])[['rating_blend', 'rank_blend', 'confederation']]
-    .first()
-    .to_dict('index')
-)
+# Per-tournament final-day lookup: for each podium tournament + year, find
+# the date of its FINAL match. Champions table needs to read each team's
+# rating as of THAT specific tournament's final day — not whichever EOS row
+# happens to come first in the year. (Previously a country with multiple
+# podium tournaments in one year would get the earliest EOS rating, which
+# wildly understated e.g. France's 2022 WC rating because the CONCACAF
+# Nations League finished in June 2022 before France's WC run started.)
+games['date'] = pd.to_datetime(games['date'])
+_tournament_final_date_by_yt = {}
+for _t in PODIUM_TOURNAMENTS:
+    _tg = games[games['tournament'] == _t]
+    if _tg.empty:
+        continue
+    for _y, _grp in _tg.groupby(_tg['date'].apply(lambda d: d.year)):
+        _tournament_final_date_by_yt[(_t, int(_y))] = _grp['date'].max()
 
 
-def country_eos_info(country, year):
-    info = year_eos.get((country, int(year)))
-    if not info:
+def country_tournament_info(country, tournament, year):
+    """Look up a country's rating + rank as of a specific tournament's final day."""
+    final_date = _tournament_final_date_by_yt.get((tournament, int(year)))
+    if final_date is None:
         return {'rating': None, 'rank': None, 'confederation': ''}
+    rows = df[(df['country'] == country) & (df['date'] == final_date)]
+    if rows.empty:
+        return {'rating': None, 'rank': None, 'confederation': ''}
+    r = rows.iloc[0]
     return {
-        'rating': round(float(info['rating_blend']), 3) if not pd.isna(info['rating_blend']) else None,
-        'rank':   int(info['rank_blend']) if not pd.isna(info['rank_blend']) else None,
-        'confederation': clean(info['confederation']),
+        'rating':        round(float(r['rating_blend']), 3) if not pd.isna(r['rating_blend']) else None,
+        'rank':          int(r['rank_blend']) if not pd.isna(r['rank_blend']) else None,
+        'confederation': clean(r['confederation']),
     }
 
 
@@ -435,10 +447,10 @@ for tournament in sorted(podiums['tournament'].unique()):
         second = yp[yp['finish'] == 2]['team'].iloc[0] if len(yp[yp['finish'] == 2]) else None
         third  = yp[yp['finish'] == 3]['team'].iloc[0] if len(yp[yp['finish'] == 3]) else None
 
-        def team_block(team_name):
+        def team_block(team_name, _tour=tournament, _yr=year):
             if not team_name:
                 return None
-            info = country_eos_info(team_name, year)
+            info = country_tournament_info(team_name, _tour, _yr)
             return {
                 'team':          team_name,
                 'flag':          country_flag(team_name),
