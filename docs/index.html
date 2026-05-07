@@ -705,7 +705,7 @@ function renderLeagueHistory(league) {
     return;
   }
 
-  function teamCell(t, bg, medalEmoji) {
+  function teamCell(t, bg) {
     if (!t) return `<td class="${bg}" colspan="3" style="text-align:center;color:#aaa">—</td>`;
     const rating  = t.rating != null ? t.rating.toFixed(2) : '—';
     const rank    = t.rank   != null ? `#${t.rank}` : '—';
@@ -715,7 +715,7 @@ function renderLeagueHistory(league) {
     else if (t.third_count) countStr = ` <span style="color:#888;font-size:0.85em;font-weight:400">(${t.third_count} 🥉)</span>`;
     return `
       <td class="${bg} team-cell" style="white-space:nowrap">
-        <span style="margin-right:4px">${medalEmoji}</span><span style="margin-right:4px">${t.flag || ''}</span>${t.team}${countStr}
+        <span style="margin-right:4px">${t.flag || ''}</span>${t.team}${countStr}
       </td>
       <td class="${bg} col-hide-mobile" style="font-variant-numeric:tabular-nums;white-space:nowrap;color:#888;font-size:0.85em">${rank}</td>
       <td class="${bg} rating-cell" style="font-variant-numeric:tabular-nums">${rating}</td>`;
@@ -727,9 +727,9 @@ function renderLeagueHistory(league) {
       : '';
     return `<tr>
     <td class="season-cell" style="white-space:nowrap">${e.season}${hostStr}</td>
-    ${teamCell(e.champion,  'col-champ', '🏆')}
-    ${teamCell(e.runner_up, 'col-ru',    '🥈')}
-    ${teamCell(e.third,     'col-ru',    '🥉')}
+    ${teamCell(e.champion,  'col-champ')}
+    ${teamCell(e.runner_up, 'col-ru')}
+    ${teamCell(e.third,     'col-ru')}
   </tr>`;
   }).join('');
 
