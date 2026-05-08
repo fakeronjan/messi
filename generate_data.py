@@ -283,17 +283,36 @@ with open('docs/data/current_standings.json', 'w') as f:
     json.dump(standings_data, f, separators=(',', ':'))
 
 # ── 2. GOAT table (top 50 country-year ratings at end of major tournaments) ─
+# Eligibility: must win a major tournament that year, OR finish 2nd in the
+# FIFA World Cup specifically. Without this gate, small-confederation teams
+# whose Massey rating spikes from a few blowout wins (Tahiti 2012, etc.)
+# pollute the list — they may have legitimately won their continental
+# trophy but their rating is over a 5-game sample of OFC opponents.
+#
+# Major tournaments tracked in tournament_podiums.csv: FIFA World Cup,
+# UEFA Euro, Copa América, AFC Asian Cup, African Cup of Nations, Gold Cup,
+# Oceania Nations Cup, UEFA / CONCACAF Nations League, FIFA Confederations Cup.
 print("Writing goat_teams.json...")
+podiums = pd.read_csv('tournament_podiums.csv')
+# Eligible (country, year) pairs: anyone who won (finish=1) any tournament
+# that year, plus WC runners-up (finish=2 in FIFA World Cup).
+_winners = podiums[podiums['finish'] == 1][['team', 'year']].rename(columns={'team': 'country'})
+_wc_runnerups = podiums[(podiums['tournament'] == 'FIFA World Cup') & (podiums['finish'] == 2)][['team', 'year']].rename(columns={'team': 'country'})
+_eligible = pd.concat([_winners, _wc_runnerups]).drop_duplicates()
+_eligible_set = set(zip(_eligible['country'], _eligible['year']))
+
 eos_all = df[df['is_end_of_season'] == 1].copy()
 # Each (country, year) might have multiple tournament-end snapshots in same year
-# (e.g. 2024 had Euro + Copa). Keep each country's BEST rating per year, then take top 50.
+# (e.g. 2024 had Euro + Copa). Keep each country's BEST rating per year, then
+# apply the championship gate, then take top 50.
 eos_top = (
     eos_all.dropna(subset=['rating_blend'])
     .sort_values('rating_blend', ascending=False)
     .drop_duplicates(subset=['country', 'year'], keep='first')
-    .head(50)
-    .reset_index(drop=True)
 )
+eos_top = eos_top[eos_top.apply(
+    lambda r: (r['country'], int(r['year'])) in _eligible_set, axis=1
+)].head(50).reset_index(drop=True)
 
 goat_data = []
 for i, (_, r) in enumerate(eos_top.iterrows()):

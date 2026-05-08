@@ -66,13 +66,13 @@ PODIUM_TOURNAMENTS = [
     'FIFA World Cup',
     'UEFA Euro',
     'Copa América',
-    'Africa Cup of Nations',
+    'African Cup of Nations',     # source uses "African" (not "Africa")
     'AFC Asian Cup',
-    'CONCACAF Gold Cup',
-    'OFC Nations Cup',
+    'Gold Cup',                   # source name; no "CONCACAF" prefix
+    'Oceania Nations Cup',        # source uses "Oceania" (not "OFC")
     'UEFA Nations League',
     'CONCACAF Nations League',
-    'FIFA Confederations Cup',
+    'FIFA Confederations Cup',    # discontinued 2017 but kept for historical podiums
 ]
 
 # Confederation lookup - maps each FIFA member to its confederation
@@ -825,8 +825,41 @@ for (tournament, year), group in podium_df.groupby(['tournament', 'year']):
     if len(final_games) == 0:
         continue
 
-    # Take the last game on the last date as the final
-    final = final_games.iloc[-1]
+    # Some tournaments play the FINAL and the 3rd-PLACE PLAYOFF on the same
+    # day (Oceania Nations Cup, Africa Cup, sometimes others). Pick the
+    # actual final by walking back the bracket: in the final both teams
+    # WON their previous match (the semifinals); in the 3rd-place playoff
+    # both teams LOST their previous match.
+    def _won_last_pre_final(team):
+        prev = group[
+            (group['date'] < last_date) &
+            ((group['home_team'] == team) | (group['away_team'] == team))
+        ].sort_values('date')
+        if prev.empty:
+            return None
+        last = prev.iloc[-1]
+        if last['home_team'] == team:
+            if last['margin_home'] > 0: return True
+            if last['margin_home'] < 0: return False
+        else:
+            if last['margin_home'] < 0: return True
+            if last['margin_home'] > 0: return False
+        # Tied — check shootout
+        sw = last.get('shootout_winner')
+        if pd.notna(sw):
+            return sw == team
+        return None
+
+    final = None
+    for cand in reversed(list(final_games.itertuples(index=False))):
+        cand_home_won = _won_last_pre_final(cand.home_team)
+        cand_away_won = _won_last_pre_final(cand.away_team)
+        if cand_home_won is True and cand_away_won is True:
+            final = cand._asdict() if hasattr(cand, '_asdict') else dict(zip(final_games.columns, cand))
+            break
+    if final is None:
+        # Fall back to the last game on the last date (original behavior).
+        final = final_games.iloc[-1].to_dict()
 
     home = final['home_team']
     away = final['away_team']
@@ -1059,78 +1092,14 @@ final_df = final_df[final_df['date'] >= pd.to_datetime('1986-01-01').date()]
 final_df = final_df[final_df['games_played'] >= min_games]
 print(f"After min_games={min_games} filter: {len(final_df)} rows")
 
-# ============================================================
-# STEP 13 - RECENTER PER SNAPSHOT TO WC-QUALIFIER MEAN
-# ============================================================
-# Massey ratings are 0-centered across the FULL game-day network. But the
-# network includes ~200 nations from CONCACAF/AFC/CAF/OFC qualifying that
-# usually lose to UEFA/CONMEBOL teams and absorb the negative side of the
-# distribution. The min_games filter then removes a chunk of them but
-# leaves an upward-shifted scale where most surviving teams are >0.
-#
-# Anchor: the 32 (or 48 from 2026) teams that qualified for the most recent
-# FIFA World Cup as of each snapshot. These represent the world's elite for
-# that 4-year cycle. Subtract their mean from every rating in that snapshot.
-# Teams not in the qualifier set keep their relative position (the shift is
-# constant per snapshot).
-
-print("Recentering ratings to WC-qualifier mean per snapshot...")
-# Build per-WC-edition qualifier set: all unique team names that played a
-# WC match in that year. (A 'qualifier' is any team that took the field in
-# the World Cup finals tournament.)
-wc_matches = df[df['tournament'] == 'FIFA World Cup'].copy()
-wc_matches['wc_year'] = wc_matches['date'].dt.year
-wc_qualifiers_by_year = {}
-for wc_year, grp in wc_matches.groupby('wc_year'):
-    wc_qualifiers_by_year[wc_year] = set(grp['home_team']).union(set(grp['away_team']))
-
-wc_years_sorted = sorted(wc_qualifiers_by_year.keys())
-
-def relevant_wc_year(snap_date):
-    """Most recent WC year whose final day was on or before snap_date.
-    Returns None if snap_date is before the first WC in our data (1990)."""
-    snap_year = snap_date.year if hasattr(snap_date, 'year') else pd.Timestamp(snap_date).year
-    for y in reversed(wc_years_sorted):
-        if y <= snap_year:
-            return y
-    return None
-
-# For each snapshot date, compute the mean rating of teams that qualified
-# for the relevant WC. Vectorize by building a (date, anchor_year) map first.
-unique_dates = final_df['date'].drop_duplicates().tolist()
-date_to_anchor_year = {d: relevant_wc_year(d) for d in unique_dates}
-final_df['_anchor_year'] = final_df['date'].map(date_to_anchor_year)
-final_df['_in_anchor'] = final_df.apply(
-    lambda r: r['country'] in wc_qualifiers_by_year.get(r['_anchor_year'], set()),
-    axis=1,
-)
-
-for col in ('rating', 'rating2', 'rating3', 'rating_blend'):
-    if col not in final_df.columns:
-        continue
-    shift = (
-        final_df[final_df['_in_anchor']]
-        .groupby('ranking_id')[col]
-        .mean()
-        .rename(f'_shift_{col}')
-    )
-    final_df = final_df.merge(shift, left_on='ranking_id', right_index=True, how='left')
-    final_df[col] = final_df[col] - final_df[f'_shift_{col}'].fillna(0)
-    final_df.drop(columns=[f'_shift_{col}'], inplace=True)
-
-final_df.drop(columns=['_anchor_year', '_in_anchor'], inplace=True)
-
-# Ranks unchanged by constant shift, but rebuild for cleanliness.
-# Some rating columns can be NaN (e.g., rating3 for teams that played no
-# WC matches in the window) — leave their rank as NaN.
-for rcol, rkcol in [('rating', 'rank'), ('rating2', 'rank2'), ('rating3', 'rank3'), ('rating_blend', 'rank_blend')]:
-    if rcol not in final_df.columns or rkcol not in final_df.columns:
-        continue
-    final_df[rkcol] = (
-        final_df.groupby('ranking_id')[rcol]
-        .rank(ascending=False, method='min')
-    )
-    final_df[rkcol] = final_df[rkcol].astype('Int64')  # nullable int
+# ── Recentering removed ───────────────────────────────────────────────────────
+# We previously shifted ratings by the WC-qualifier mean per snapshot to make
+# the anchor "average WC qualifier = 0". But the rest of the network is so
+# much weaker than that anchor that this pushed most of the dataset into
+# strongly negative territory and the displayed values lost intuitive meaning.
+# Reverting to raw Massey output. GOAT-level anomalies (small-confederation
+# teams with sky-high ratings from a few blowout games) are now handled by
+# a championship gate in generate_data.py instead.
 
 final_df.to_csv('messi_ratings_final.csv', index=False)
 print("messi_ratings_final.csv saved!")

@@ -7,10 +7,10 @@ AFC Asian Cup,1984,China PR,2
 AFC Asian Cup,1988,Saudi Arabia,1
 AFC Asian Cup,1988,South Korea,2
 AFC Asian Cup,1988,Iran,3
-AFC Asian Cup,1992,China PR,1
-AFC Asian Cup,1992,United Arab Emirates,2
-AFC Asian Cup,1996,Iran,1
-AFC Asian Cup,1996,Kuwait,2
+AFC Asian Cup,1992,Japan,1
+AFC Asian Cup,1992,Saudi Arabia,2
+AFC Asian Cup,1996,Saudi Arabia,1
+AFC Asian Cup,1996,United Arab Emirates,2
 AFC Asian Cup,2000,Japan,1
 AFC Asian Cup,2000,Saudi Arabia,2
 AFC Asian Cup,2004,Japan,1
@@ -29,19 +29,88 @@ AFC Asian Cup,2019,Qatar,1
 AFC Asian Cup,2019,Japan,2
 AFC Asian Cup,2024,Qatar,1
 AFC Asian Cup,2024,Jordan,2
+African Cup of Nations,1980,Nigeria,1
+African Cup of Nations,1980,Algeria,2
+African Cup of Nations,1980,Morocco,3
+African Cup of Nations,1982,Ghana,1
+African Cup of Nations,1982,Libya,2
+African Cup of Nations,1982,Zambia,3
+African Cup of Nations,1984,Cameroon,1
+African Cup of Nations,1984,Nigeria,2
+African Cup of Nations,1984,Algeria,3
+African Cup of Nations,1986,Egypt,1
+African Cup of Nations,1986,Cameroon,2
+African Cup of Nations,1986,Ivory Coast,3
+African Cup of Nations,1988,Cameroon,1
+African Cup of Nations,1988,Nigeria,2
+African Cup of Nations,1988,Algeria,3
+African Cup of Nations,1990,Algeria,1
+African Cup of Nations,1990,Nigeria,2
+African Cup of Nations,1990,Zambia,3
+African Cup of Nations,1992,Ivory Coast,1
+African Cup of Nations,1992,Ghana,2
+African Cup of Nations,1992,Nigeria,3
+African Cup of Nations,1994,Nigeria,1
+African Cup of Nations,1994,Zambia,2
+African Cup of Nations,1996,South Africa,1
+African Cup of Nations,1996,Tunisia,2
+African Cup of Nations,1998,Egypt,1
+African Cup of Nations,1998,South Africa,2
+African Cup of Nations,1998,DR Congo,3
+African Cup of Nations,2000,Cameroon,1
+African Cup of Nations,2000,Nigeria,2
+African Cup of Nations,2000,South Africa,3
+African Cup of Nations,2002,Cameroon,1
+African Cup of Nations,2002,Senegal,2
+African Cup of Nations,2002,Nigeria,3
+African Cup of Nations,2004,Tunisia,1
+African Cup of Nations,2004,Morocco,2
+African Cup of Nations,2004,Nigeria,3
+African Cup of Nations,2006,Egypt,1
+African Cup of Nations,2006,Ivory Coast,2
+African Cup of Nations,2006,Nigeria,3
+African Cup of Nations,2008,Egypt,1
+African Cup of Nations,2008,Cameroon,2
+African Cup of Nations,2008,Ghana,3
+African Cup of Nations,2010,Egypt,1
+African Cup of Nations,2010,Ghana,2
+African Cup of Nations,2010,Nigeria,3
+African Cup of Nations,2012,Zambia,1
+African Cup of Nations,2012,Ivory Coast,2
+African Cup of Nations,2012,Mali,3
+African Cup of Nations,2013,Nigeria,1
+African Cup of Nations,2013,Burkina Faso,2
+African Cup of Nations,2013,Mali,3
+African Cup of Nations,2015,Ivory Coast,1
+African Cup of Nations,2015,Ghana,2
+African Cup of Nations,2015,DR Congo,3
+African Cup of Nations,2017,Cameroon,1
+African Cup of Nations,2017,Egypt,2
+African Cup of Nations,2017,Burkina Faso,3
+African Cup of Nations,2019,Algeria,1
+African Cup of Nations,2019,Senegal,2
+African Cup of Nations,2019,Nigeria,3
+African Cup of Nations,2022,Senegal,1
+African Cup of Nations,2022,Egypt,2
+African Cup of Nations,2022,Cameroon,3
+African Cup of Nations,2024,Ivory Coast,1
+African Cup of Nations,2024,Nigeria,2
+African Cup of Nations,2025,Cameroon,1
+African Cup of Nations,2025,Mozambique,2
+African Cup of Nations,2025,DR Congo,3
+African Cup of Nations,2026,Morocco,1
+African Cup of Nations,2026,Senegal,2
+African Cup of Nations,2026,Nigeria,3
 CONCACAF Nations League,2019,El Salvador,1
 CONCACAF Nations League,2019,Dominican Republic,2
 CONCACAF Nations League,2019,Dominica,3
 CONCACAF Nations League,2021,United States,1
 CONCACAF Nations League,2021,Mexico,2
-CONCACAF Nations League,2022,Haiti,1
-CONCACAF Nations League,2022,Guyana,2
-CONCACAF Nations League,2022,Trinidad and Tobago,3
 CONCACAF Nations League,2023,Saint Martin,1
 CONCACAF Nations League,2023,Bonaire,2
 CONCACAF Nations League,2023,Montserrat,3
-CONCACAF Nations League,2024,Mexico,1
-CONCACAF Nations League,2024,Honduras,2
+CONCACAF Nations League,2024,Dominican Republic,1
+CONCACAF Nations League,2024,Bermuda,2
 CONCACAF Nations League,2024,Sint Maarten,3
 CONCACAF Nations League,2025,Mexico,1
 CONCACAF Nations League,2025,Panama,2
@@ -123,6 +192,69 @@ FIFA World Cup,2018,Belgium,3
 FIFA World Cup,2022,Argentina,1
 FIFA World Cup,2022,France,2
 FIFA World Cup,2022,Croatia,3
+Gold Cup,1991,United States,1
+Gold Cup,1991,Honduras,2
+Gold Cup,1993,Mexico,1
+Gold Cup,1993,United States,2
+Gold Cup,1996,Mexico,1
+Gold Cup,1996,Brazil,2
+Gold Cup,1998,Mexico,1
+Gold Cup,1998,United States,2
+Gold Cup,2000,Canada,1
+Gold Cup,2000,Colombia,2
+Gold Cup,2002,United States,1
+Gold Cup,2002,Costa Rica,2
+Gold Cup,2003,Mexico,1
+Gold Cup,2003,Brazil,2
+Gold Cup,2003,United States,3
+Gold Cup,2005,United States,1
+Gold Cup,2005,Panama,2
+Gold Cup,2007,United States,1
+Gold Cup,2007,Mexico,2
+Gold Cup,2009,Mexico,1
+Gold Cup,2009,United States,2
+Gold Cup,2011,Mexico,1
+Gold Cup,2011,United States,2
+Gold Cup,2013,United States,1
+Gold Cup,2013,Panama,2
+Gold Cup,2015,Mexico,1
+Gold Cup,2015,Jamaica,2
+Gold Cup,2015,Panama,3
+Gold Cup,2017,United States,1
+Gold Cup,2017,Jamaica,2
+Gold Cup,2019,Mexico,1
+Gold Cup,2019,United States,2
+Gold Cup,2021,United States,1
+Gold Cup,2021,Mexico,2
+Gold Cup,2023,Mexico,1
+Gold Cup,2023,Panama,2
+Gold Cup,2025,Mexico,1
+Gold Cup,2025,United States,2
+Oceania Nations Cup,1980,Australia,1
+Oceania Nations Cup,1980,Tahiti,2
+Oceania Nations Cup,1980,New Zealand,3
+Oceania Nations Cup,1995,Tahiti,1
+Oceania Nations Cup,1995,Solomon Islands,2
+Oceania Nations Cup,1996,Australia,1
+Oceania Nations Cup,1996,Tahiti,2
+Oceania Nations Cup,1998,New Zealand,1
+Oceania Nations Cup,1998,Australia,2
+Oceania Nations Cup,2000,Australia,1
+Oceania Nations Cup,2000,New Zealand,2
+Oceania Nations Cup,2002,New Zealand,1
+Oceania Nations Cup,2002,Australia,2
+Oceania Nations Cup,2004,Australia,1
+Oceania Nations Cup,2004,Solomon Islands,2
+Oceania Nations Cup,2007,New Zealand,1
+Oceania Nations Cup,2007,Vanuatu,2
+Oceania Nations Cup,2008,Fiji,1
+Oceania Nations Cup,2008,New Zealand,2
+Oceania Nations Cup,2012,Tahiti,1
+Oceania Nations Cup,2012,New Caledonia,2
+Oceania Nations Cup,2016,New Zealand,1
+Oceania Nations Cup,2016,Papua New Guinea,2
+Oceania Nations Cup,2024,New Zealand,1
+Oceania Nations Cup,2024,Vanuatu,2
 UEFA Euro,1980,Germany,1
 UEFA Euro,1980,Belgium,2
 UEFA Euro,1980,Czechoslovakia,3
@@ -151,14 +283,14 @@ UEFA Euro,2024,England,2
 UEFA Nations League,2018,Kosovo,1
 UEFA Nations League,2018,Azerbaijan,2
 UEFA Nations League,2018,Georgia,3
-UEFA Nations League,2019,England,1
-UEFA Nations League,2019,Switzerland,2
-UEFA Nations League,2020,Israel,1
-UEFA Nations League,2020,Scotland,2
+UEFA Nations League,2019,Portugal,1
+UEFA Nations League,2019,Netherlands,2
+UEFA Nations League,2020,Wales,1
+UEFA Nations League,2020,Finland,2
 UEFA Nations League,2020,Portugal,3
 UEFA Nations League,2021,France,1
 UEFA Nations League,2021,Spain,2
-UEFA Nations League,2023,Italy,1
-UEFA Nations League,2023,Netherlands,2
+UEFA Nations League,2023,Spain,1
+UEFA Nations League,2023,Croatia,2
 UEFA Nations League,2025,Portugal,1
 UEFA Nations League,2025,Spain,2
