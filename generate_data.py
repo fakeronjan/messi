@@ -234,23 +234,32 @@ def country_year_finishes(country, year):
 
 
 # is_end_of_season: rows whose snapshot date falls on the LAST DAY of a major tournament.
-# Captures each team's rating at peak tournament moments (WC final day, Euro final day, etc.)
-# rather than fading-into-year-end snapshots after late-year friendlies.
+# Captures each team's rating at peak tournament moments (WC final day, Euro
+# final day, etc.) rather than fading-into-year-end snapshots after late-year
+# friendlies. Names match the source data (see messi.py PODIUM_TOURNAMENTS).
 PODIUM_TOURNAMENTS = [
     'FIFA World Cup',
     'UEFA Euro',
     'Copa América',
+    'African Cup of Nations',
     'AFC Asian Cup',
+    'Gold Cup',
+    'Oceania Nations Cup',
     'UEFA Nations League',
     'CONCACAF Nations League',
+    'FIFA Confederations Cup',
 ]
-_tournament_final_dates = set()
+# Per-tournament + per-year final date map. Used both for is_end_of_season
+# (set of all final dates) and the GOAT anchor logic (specific date per
+# (tournament, year)).
+_tournament_final_date_map = {}  # (tournament, year_int) -> final pd.Timestamp
 for _t in PODIUM_TOURNAMENTS:
     _tg = games[games['tournament'] == _t]
     if _tg.empty:
         continue
     for _year, _grp in _tg.groupby(_tg['date'].apply(lambda d: d.year)):
-        _tournament_final_dates.add(_grp['date'].max())
+        _tournament_final_date_map[(_t, int(_year))] = _grp['date'].max()
+_tournament_final_dates = set(_tournament_final_date_map.values())
 
 df['is_end_of_season'] = df['date'].apply(lambda d: 1 if d in _tournament_final_dates else 0)
 print(f"Tournament-end snapshot dates: {len(_tournament_final_dates)}")
@@ -284,35 +293,69 @@ with open('docs/data/current_standings.json', 'w') as f:
 
 # ── 2. GOAT table (top 50 country-year ratings at end of major tournaments) ─
 # Eligibility: must win a major tournament that year, OR finish 2nd in the
-# FIFA World Cup specifically. Without this gate, small-confederation teams
-# whose Massey rating spikes from a few blowout wins (Tahiti 2012, etc.)
-# pollute the list — they may have legitimately won their continental
-# trophy but their rating is over a 5-game sample of OFC opponents.
+# FIFA World Cup specifically. Each team is then anchored at the SPECIFIC
+# tournament's final date (the moment they actually won the trophy) — not
+# whichever snapshot in the year had the highest rating. If a team is
+# eligible via multiple tournaments in one year (e.g. USA 2021 won Gold Cup
+# AND CONCACAF Nations League), we use the rating from whichever is highest.
 #
-# Major tournaments tracked in tournament_podiums.csv: FIFA World Cup,
-# UEFA Euro, Copa América, AFC Asian Cup, African Cup of Nations, Gold Cup,
-# Oceania Nations Cup, UEFA / CONCACAF Nations League, FIFA Confederations Cup.
+# Also requires games_played >= 6 in the rolling window — filters teams
+# whose Massey rating comes from too small a sample of weak-confederation
+# opponents (e.g. Tahiti 2012 OFC only had 5 OFC qualifier games).
 print("Writing goat_teams.json...")
 podiums = pd.read_csv('tournament_podiums.csv')
-# Eligible (country, year) pairs: anyone who won (finish=1) any tournament
-# that year, plus WC runners-up (finish=2 in FIFA World Cup).
-_winners = podiums[podiums['finish'] == 1][['team', 'year']].rename(columns={'team': 'country'})
-_wc_runnerups = podiums[(podiums['tournament'] == 'FIFA World Cup') & (podiums['finish'] == 2)][['team', 'year']].rename(columns={'team': 'country'})
-_eligible = pd.concat([_winners, _wc_runnerups]).drop_duplicates()
-_eligible_set = set(zip(_eligible['country'], _eligible['year']))
+GOAT_MIN_GAMES = 6
 
-eos_all = df[df['is_end_of_season'] == 1].copy()
-# Each (country, year) might have multiple tournament-end snapshots in same year
-# (e.g. 2024 had Euro + Copa). Keep each country's BEST rating per year, then
-# apply the championship gate, then take top 50.
+# Build the eligibility list: each row is one qualifying (country, year, tournament).
+# WC: 1st OR 2nd qualifies. All other tournaments: only 1st qualifies.
+_wc_eligible = podiums[
+    (podiums['tournament'] == 'FIFA World Cup') & (podiums['finish'].isin([1, 2]))
+][['team', 'year', 'tournament']]
+_other_eligible = podiums[
+    (podiums['tournament'] != 'FIFA World Cup') & (podiums['finish'] == 1)
+][['team', 'year', 'tournament']]
+_eligible_rows = pd.concat([_wc_eligible, _other_eligible]).drop_duplicates()
+
+# For each eligible row, pull the team's rating at THAT tournament's final
+# date. Skip if games_played < GOAT_MIN_GAMES at the snapshot.
+df_indexed = df.set_index(['country', 'date'])
+candidate_records = []
+for _, row in _eligible_rows.iterrows():
+    final_date = _tournament_final_date_map.get((row['tournament'], int(row['year'])))
+    if final_date is None:
+        continue
+    # df dates are pd.Timestamp.date() objects already (set at file load).
+    # _tournament_final_date_map values come from games['date'] which can be
+    # either pd.Timestamp or datetime.date depending on dtype — normalize.
+    final_date_key = final_date.date() if hasattr(final_date, 'date') else final_date
+    try:
+        snap = df_indexed.loc[(row['team'], final_date_key)]
+    except KeyError:
+        continue
+    if isinstance(snap, pd.DataFrame):
+        snap = snap.iloc[0]
+    if pd.isna(snap.get('rating_blend')):
+        continue
+    if snap.get('games_played', 0) < GOAT_MIN_GAMES:
+        continue
+    candidate_records.append({
+        'country':       row['team'],
+        'year':          int(row['year']),
+        'tournament':    row['tournament'],
+        'rating_blend':  snap['rating_blend'],
+        'rank_blend':    snap.get('rank_blend'),
+        'confederation': snap.get('confederation', ''),
+        'games_played':  int(snap.get('games_played', 0)),
+        'date':          final_date,
+    })
+
 eos_top = (
-    eos_all.dropna(subset=['rating_blend'])
+    pd.DataFrame(candidate_records)
     .sort_values('rating_blend', ascending=False)
-    .drop_duplicates(subset=['country', 'year'], keep='first')
+    .drop_duplicates(subset=['country', 'year'], keep='first')  # keep highest if multi-tournament year
+    .head(50)
+    .reset_index(drop=True)
 )
-eos_top = eos_top[eos_top.apply(
-    lambda r: (r['country'], int(r['year'])) in _eligible_set, axis=1
-)].head(50).reset_index(drop=True)
 
 goat_data = []
 for i, (_, r) in enumerate(eos_top.iterrows()):
