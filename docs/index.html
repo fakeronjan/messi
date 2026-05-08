@@ -71,6 +71,26 @@
     margin-bottom: 14px;
     align-items: center;
   }
+  .league-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .league-pills button {
+    background: #fff;
+    border: 1px solid #ddd;
+    color: #155a75;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 999px;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+  }
+  .league-pills button:hover { background: #fafafa; }
+  .league-pills button.active { background: #1a6b8a; color: #ff6eb4; border-color: #1a6b8a; }
+
   select {
     padding: 7px 10px;
     border: 1px solid #ddd;
@@ -233,6 +253,7 @@
     .controls { flex-direction: column; align-items: stretch; }
     select { min-width: unset; width: 100%; }
     .rating-bar-track { display: none; }    /* drop bar on small screens, keep number */
+    .league-pills button { font-size: 11px; padding: 5px 9px; }
     /* hide lower-priority columns on mobile */
     .col-hide-mobile { display: none; }
   }
@@ -255,18 +276,10 @@
 
 <!-- ── STANDINGS ────────────────────────────────────────────────────────── -->
 <div id="standings" class="tab active">
+  <div class="league-pills" id="standings-conf-pills"></div>
   <div class="controls">
     <select id="season-filter"></select>
     <select id="date-filter" style="min-width:200px"></select>
-    <select id="league-filter">
-      <option value="all">All Confederations</option>
-      <option value="UEFA">🇪🇺 UEFA</option>
-      <option value="CONMEBOL">🌎 CONMEBOL</option>
-      <option value="CONCACAF">🌎 CONCACAF</option>
-      <option value="AFC">🌏 AFC</option>
-      <option value="CAF">🌍 CAF</option>
-      <option value="OFC">🌏 OFC</option>
-    </select>
     <span class="count-label" id="standings-count"></span>
   </div>
   <div id="standings-table-wrap"><p class="loading">Loading standings...</p></div>
@@ -274,16 +287,8 @@
 
 <!-- ── TEAM SUMMARY ─────────────────────────────────────────────────────── -->
 <div id="team-summary" class="tab">
+  <div class="league-pills" id="ts-conf-pills"></div>
   <div class="controls">
-    <select id="league-select">
-      <option value="">— Select a confederation —</option>
-      <option value="UEFA">🇪🇺 UEFA</option>
-      <option value="CONMEBOL">🌎 CONMEBOL</option>
-      <option value="CONCACAF">🌎 CONCACAF</option>
-      <option value="AFC">🌏 AFC</option>
-      <option value="CAF">🌍 CAF</option>
-      <option value="OFC">🌏 OFC</option>
-    </select>
     <select id="team-select" disabled><option value="">— Select a country —</option></select>
     <select id="season-select"><option value="all">All Years</option></select>
     <select id="date-type-select">
@@ -299,39 +304,15 @@
 
 <!-- ── LEAGUE HISTORY ────────────────────────────────────────────────────── -->
 <div id="league-history" class="tab">
-  <div class="controls">
-    <select id="history-league-filter">
-      <option value="">— Select a tournament —</option>
-      <optgroup label="World">
-        <option value="FIFA World Cup">🏆 FIFA World Cup</option>
-      </optgroup>
-      <optgroup label="Continental Championships">
-        <option value="UEFA Euro">🇪🇺 UEFA Euro</option>
-        <option value="Copa América">🌎 Copa América</option>
-        <option value="AFC Asian Cup">🌏 AFC Asian Cup</option>
-      </optgroup>
-      <optgroup label="Nations Leagues">
-        <option value="UEFA Nations League">🇪🇺 UEFA Nations League</option>
-        <option value="CONCACAF Nations League">🌎 CONCACAF Nations League</option>
-      </optgroup>
-    </select>
-  </div>
-  <div id="history-table-wrap"><p class="loading">Select a league above.</p></div>
+  <div class="league-pills" id="history-world-pills" style="margin-bottom:6px"></div>
+  <div class="league-pills" id="history-continental-pills" style="margin-bottom:6px"></div>
+  <div class="league-pills" id="history-nations-pills"></div>
+  <div id="history-table-wrap"><p class="loading">Select a tournament above.</p></div>
 </div>
 
 <!-- ── GOAT TABLE ───────────────────────────────────────────────────────── -->
 <div id="goat" class="tab">
-  <div class="controls">
-    <select id="goat-league-filter">
-      <option value="all">All Confederations</option>
-      <option value="UEFA">🇪🇺 UEFA</option>
-      <option value="CONMEBOL">🌎 CONMEBOL</option>
-      <option value="CONCACAF">🌎 CONCACAF</option>
-      <option value="AFC">🌏 AFC</option>
-      <option value="CAF">🌍 CAF</option>
-      <option value="OFC">🌏 OFC</option>
-    </select>
-  </div>
+  <div class="league-pills" id="goat-conf-pills"></div>
   <p class="data-note">Top 50 single-snapshot ratings, taken at the end of each major tournament. Eligibility requires winning a major continental trophy (or finishing 2nd in the FIFA World Cup) in that year. Data covers 1986 through the current year.</p>
   <div id="goat-table-wrap"><p class="loading">Loading GOAT table...</p></div>
 </div>
@@ -343,6 +324,60 @@ let currentSnapshot   = null;
 let goatData          = null;
 let teamsIndex        = null;
 let teamCache         = {};
+
+// Pill state (replaces league-filter / league-select / history-league-filter / goat-league-filter dropdowns)
+let standingsConf  = 'all';
+let tsConf         = '';
+let goatConf       = 'all';
+let historyTourny  = '';
+
+const CONF_OPTIONS = [
+  { value: 'UEFA',     label: '🇪🇺 UEFA'     },
+  { value: 'CONMEBOL', label: '🌎 CONMEBOL' },
+  { value: 'CONCACAF', label: '🌎 CONCACAF' },
+  { value: 'AFC',      label: '🌏 AFC'      },
+  { value: 'CAF',      label: '🌍 CAF'      },
+  { value: 'OFC',      label: '🌏 OFC'      },
+];
+const HISTORY_WORLD = [
+  { value: 'FIFA World Cup', label: '🏆 FIFA World Cup' },
+];
+const HISTORY_CONTINENTAL = [
+  { value: 'UEFA Euro',     label: '🇪🇺 UEFA Euro'     },
+  { value: 'Copa América',  label: '🌎 Copa América'  },
+  { value: 'AFC Asian Cup', label: '🌏 AFC Asian Cup' },
+];
+const HISTORY_NATIONS = [
+  { value: 'UEFA Nations League',     label: '🇪🇺 UEFA Nations League'     },
+  { value: 'CONCACAF Nations League', label: '🌎 CONCACAF Nations League' },
+];
+
+function buildPillsFromOpts(containerId, opts, current, onSelect, clearSiblings) {
+  const wrap = document.getElementById(containerId);
+  wrap.innerHTML = '';
+  opts.forEach(o => {
+    const b = document.createElement('button');
+    b.innerHTML = o.label;
+    b.dataset.value = o.value;
+    if (o.value === current) b.classList.add('active');
+    b.addEventListener('click', () => {
+      wrap.querySelectorAll('button').forEach(x => x.classList.remove('active'));
+      (clearSiblings || []).forEach(sid => {
+        document.querySelectorAll(`#${sid} button`).forEach(x => x.classList.remove('active'));
+      });
+      b.classList.add('active');
+      onSelect(o.value);
+    });
+    wrap.appendChild(b);
+  });
+}
+
+function buildConfPills(containerId, includeAll, current, onSelect) {
+  const opts = includeAll
+    ? [{ value: 'all', label: 'All Confederations' }, ...CONF_OPTIONS]
+    : CONF_OPTIONS;
+  buildPillsFromOpts(containerId, opts, current, onSelect);
+}
 
 // ── Utilities ───────────────────────────────────────────────────────────────
 function confederationBadge(confed) {
@@ -468,7 +503,7 @@ function selectSnapshot(date) {
 
 function renderStandings() {
   if (!currentSnapshot) return;
-  const confed = document.getElementById('league-filter').value;
+  const confed = standingsConf;
 
   // Compute confederation rank: position within each confederation (sorted by OVR rank)
   const confRankMap = {};
@@ -515,7 +550,10 @@ function renderStandings() {
 
 document.getElementById('season-filter').addEventListener('change', e => loadSeason(e.target.value));
 document.getElementById('date-filter').addEventListener('change', e => selectSnapshot(e.target.value));
-document.getElementById('league-filter').addEventListener('change', renderStandings);
+buildConfPills('standings-conf-pills', true, standingsConf, v => {
+  standingsConf = v;
+  renderStandings();
+});
 
 // ── Team Summary ─────────────────────────────────────────────────────────────
 async function loadTeamsIndex() {
@@ -541,8 +579,9 @@ function populateTeams(confederation) {
   sel.disabled = false;
 }
 
-document.getElementById('league-select').addEventListener('change', e => {
-  populateTeams(e.target.value);
+buildConfPills('ts-conf-pills', false, tsConf, v => {
+  tsConf = v;
+  populateTeams(v);
   document.getElementById('chart-wrap').style.display = 'none';
   document.getElementById('team-table-wrap').innerHTML =
     '<p class="loading">Select a country above.</p>';
@@ -751,9 +790,6 @@ function renderLeagueHistory(league) {
     </table>`;
 }
 
-document.getElementById('history-league-filter').addEventListener('change', e => {
-  renderLeagueHistory(e.target.value);
-});
 
 // ── GOAT Table ────────────────────────────────────────────────────────────────
 async function loadGoat() {
@@ -768,9 +804,9 @@ async function loadGoat() {
 }
 
 function renderGoat() {
-  const confed = document.getElementById('goat-league-filter').value;
+  if (!goatData) return;
   let teams = goatData;
-  if (confed !== 'all') teams = teams.filter(t => t.confederation === confed);
+  if (goatConf !== 'all') teams = teams.filter(t => t.confederation === goatConf);
 
   let displayRank = 1;
   const rows = teams.map(t => `<tr>
@@ -795,9 +831,15 @@ function renderGoat() {
     </table>`;
 }
 
-document.getElementById('goat-league-filter').addEventListener('change', renderGoat);
-
 // ── Init ─────────────────────────────────────────────────────────────────────
+buildConfPills('goat-conf-pills', true, goatConf, v => {
+  goatConf = v;
+  renderGoat();
+});
+const onHistoryPick = v => { historyTourny = v; renderLeagueHistory(v); };
+buildPillsFromOpts('history-world-pills',       HISTORY_WORLD,       historyTourny, onHistoryPick, ['history-continental-pills', 'history-nations-pills']);
+buildPillsFromOpts('history-continental-pills', HISTORY_CONTINENTAL, historyTourny, onHistoryPick, ['history-world-pills', 'history-nations-pills']);
+buildPillsFromOpts('history-nations-pills',     HISTORY_NATIONS,     historyTourny, onHistoryPick, ['history-world-pills', 'history-continental-pills']);
 initStandings();
 loadTeamsIndex();
 loadChampions();
