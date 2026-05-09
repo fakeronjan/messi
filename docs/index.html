@@ -349,7 +349,7 @@ const CONF_OPTIONS = [
   { value: 'OFC',      label: '🌏 OFC'      },
 ];
 const HISTORY_WORLD = [
-  { value: 'FIFA World Cup', label: '🏆 FIFA World Cup' },
+  { value: 'FIFA World Cup', label: '👑 FIFA World Cup' },
 ];
 const HISTORY_CONTINENTAL = [
   { value: 'UEFA Euro',     label: '🇪🇺 UEFA Euro'     },
@@ -425,12 +425,18 @@ function confBadge(conf, wonContinental) {
 
 function finishBadge(finishes) {
   // finishes: list of {tournament, finish} where tournament is short label (WC, Euro, Copa, etc.)
-  // Renders ZIDANE-style colored pills, e.g. "WC 🏆", "Euro 🥈", "Copa 🥉"
+  // Renders ZIDANE-style colored pills, e.g. "WC 👑", "Euro 🏆", "Copa 🥈"
+  // 👑 reserved for FIFA World Cup gold (THE singular global championship);
+  // 🏆 for continental tournament gold (Euro, Copa, AFCON, etc.)
   if (!finishes || !finishes.length) return '';
   const cls = (f) => f === 1 ? 'finish-champion' : (f === 2 ? 'finish-runner' : 'finish-bronze');
-  const medal = (f) => f === 1 ? '🏆' : (f === 2 ? '🥈' : '🥉');
+  const medal = (x) => {
+    if (x.finish === 1) return x.tournament === 'WC' ? '👑' : '🏆';
+    if (x.finish === 2) return '🥈';
+    return '🥉';
+  };
   return finishes.map(x =>
-    `<span class="finish-badge ${cls(x.finish)}">${x.tournament} ${medal(x.finish)}</span>`
+    `<span class="finish-badge ${cls(x.finish)}">${x.tournament} ${medal(x)}</span>`
   ).join(' ');
 }
 
@@ -774,13 +780,16 @@ function renderLeagueHistory(league) {
     return;
   }
 
+  // 👑 reserved for FIFA World Cup champion counts; other tournaments use 🏆
+  const champEmoji = league === 'FIFA World Cup' ? '👑' : '🏆';
+
   function teamCell(t, bg) {
     if (!t) return `<td class="${bg}" colspan="4" style="text-align:center;color:#aaa">—</td>`;
     const rating   = t.rating    != null ? t.rating.toFixed(2) : '—';
     const ovrRank  = t.rank      != null ? `${t.rank}`         : '—';
     const confRank = t.conf_rank != null ? `${t.conf_rank}`    : '—';
     let countStr = '';
-    if (t.title_count) countStr = ` <span style="color:#888;font-size:0.85em;font-weight:400">(${t.title_count} 🏆)</span>`;
+    if (t.title_count) countStr = ` <span style="color:#888;font-size:0.85em;font-weight:400">(${t.title_count} ${champEmoji})</span>`;
     else if (t.runner_up_count) countStr = ` <span style="color:#888;font-size:0.85em;font-weight:400">(${t.runner_up_count} 🥈)</span>`;
     else if (t.third_count) countStr = ` <span style="color:#888;font-size:0.85em;font-weight:400">(${t.third_count} 🥉)</span>`;
     const disputedTag = t.disputed
