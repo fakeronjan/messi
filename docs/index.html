@@ -210,6 +210,7 @@
   .finish-runner   { background: #ddd; color: #444; }
   .finish-leader   { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
   .finish-bronze   { background: #cd7f32; color: #fff; }
+  .conf-pill       { background: #f4f4f4; color: #555; border: 1px solid #e8e8e8; }
 
   .last-match-cell {
     font-size: 12px;
@@ -388,22 +389,39 @@ function buildConfPills(containerId, includeAll, current, onSelect) {
 }
 
 // ── Utilities ───────────────────────────────────────────────────────────────
-function confederationBadge(confed) {
-  const cls = {
-    'UEFA': 'badge-EPL', 'CONMEBOL': 'badge-LaLiga',
-    'CONCACAF': 'badge-Bundesliga', 'AFC': 'badge-SerieA',
-    'CAF': 'badge-Ligue1', 'OFC': 'badge-Other',
-  }[confed] || 'badge-Other';
-  const short = {
-    'UEFA':     '🇪🇺 UEFA',
-    'CONMEBOL': '🌎 CONMEBOL',
-    'CONCACAF': '🌎 CONCACAF',
-    'AFC':      '🌏 AFC',
-    'CAF':      '🌍 CAF',
-    'OFC':      '🌏 OFC',
-  }[confed] || confed;
-  return `<span class="league-badge ${cls}">${short}</span>`;
+const _CONF_BADGE_CLS = {
+  'UEFA': 'badge-EPL', 'CONMEBOL': 'badge-LaLiga',
+  'CONCACAF': 'badge-Bundesliga', 'AFC': 'badge-SerieA',
+  'CAF': 'badge-Ligue1', 'OFC': 'badge-Other',
+};
+const _CONF_BADGE_LABEL = {
+  'UEFA':     '🇪🇺 UEFA',
+  'CONMEBOL': '🌎 CONMEBOL',
+  'CONCACAF': '🌎 CONCACAF',
+  'AFC':      '🌏 AFC',
+  'CAF':      '🌍 CAF',
+  'OFC':      '🌏 OFC',
+};
+
+function confederationBadge(confed, wonContinental) {
+  if (!confed) return '';
+  if (wonContinental) {
+    return `<span class="finish-badge finish-champion" title="${confed} Continental Champion">${confed} 🏆</span>`;
+  }
+  const cls = _CONF_BADGE_CLS[confed] || 'badge-Other';
+  const label = _CONF_BADGE_LABEL[confed] || confed;
+  return `<span class="league-badge ${cls}">${label}</span>`;
 }
+
+function confBadge(conf, wonContinental) {
+  // Team Summary uses a simpler gold-pill / plain-pill (no per-confederation color)
+  if (!conf) return '';
+  if (wonContinental) {
+    return `<span class="finish-badge finish-champion" title="${conf} Continental Champion">${conf} 🏆</span>`;
+  }
+  return `<span class="finish-badge conf-pill">${conf}</span>`;
+}
+
 
 function finishBadge(finishes) {
   // finishes: list of {tournament, finish} where tournament is short label (WC, Euro, Copa, etc.)
@@ -530,7 +548,7 @@ function renderStandings() {
       <td class="rank-cell">${t.rank != null ? t.rank : '—'}</td>
       <td class="rank-cell col-hide-mobile">${cRank}</td>
       <td class="team-cell"><span style="margin-right:4px">${t.flag || ''}</span>${t.team}</td>
-      <td>${confederationBadge(t.confederation)}</td>
+      <td>${confederationBadge(t.confederation, !!t.continental_winner)}</td>
       <td>${ratingBar(t.rating)}</td>
       <td class="last-match-cell">
         <span class="${resultClass(t.last_match)}">${t.last_match || '—'}</span>
@@ -547,7 +565,7 @@ function renderStandings() {
     <table>
       <thead><tr>
         <th>OVR #</th><th class="col-hide-mobile">Conf #</th>
-        <th>Country</th><th>Confederation</th><th>Rating</th>
+        <th>Country</th><th>Conf</th><th>Rating</th>
         <th>Last Match</th>
         <th class="col-hide-mobile">Date</th>
         <th class="col-hide-mobile">Honors</th>
@@ -651,7 +669,9 @@ function renderTeamTable() {
       <span class="${resultClass(g.last_match)}">${g.last_match || '—'}</span>
     </td>
     <td class="rank-cell">${g.rank}</td>
+    <td class="rank-cell col-hide-mobile">${g.conf_rank != null ? g.conf_rank : '—'}</td>
     <td>${ratingBar(g.rating)}</td>
+    <td class="col-hide-mobile" style="font-size:11px">${confBadge(data.confederation, g.continental_winner)}</td>
     <td class="col-hide-mobile" style="font-size:11px">${finishBadge(g.tournament_finishes)}</td>
   </tr>`).join('');
 
@@ -659,7 +679,9 @@ function renderTeamTable() {
     <table>
       <thead><tr>
         <th>Date</th><th>Year</th><th>Last Match</th>
-        <th>Rank</th><th>Rating</th>
+        <th>OVR #</th><th class="col-hide-mobile">Conf #</th>
+        <th>Rating</th>
+        <th class="col-hide-mobile">Conf</th>
         <th class="col-hide-mobile">Honors</th>
       </tr></thead>
       <tbody>${tableRows}</tbody>
@@ -676,7 +698,7 @@ function drawChart(rows, seasonFilter) {
   const H = 180;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
 
-  const CHART_MIN = -4, CHART_MAX = 4;
+  const CHART_MIN = -2.5, CHART_MAX = 2.5;
   const CTOP = 10, CBOT = 152;   // chart area; 152..178 reserved for x-axis
 
   const px = (i) => (i / (rows.length - 1)) * (W - 20) + 10;
@@ -753,9 +775,10 @@ function renderLeagueHistory(league) {
   }
 
   function teamCell(t, bg) {
-    if (!t) return `<td class="${bg}" colspan="3" style="text-align:center;color:#aaa">—</td>`;
-    const rating  = t.rating != null ? t.rating.toFixed(2) : '—';
-    const rank    = t.rank   != null ? `${t.rank}` : '—';
+    if (!t) return `<td class="${bg}" colspan="4" style="text-align:center;color:#aaa">—</td>`;
+    const rating   = t.rating    != null ? t.rating.toFixed(2) : '—';
+    const ovrRank  = t.rank      != null ? `${t.rank}`         : '—';
+    const confRank = t.conf_rank != null ? `${t.conf_rank}`    : '—';
     let countStr = '';
     if (t.title_count) countStr = ` <span style="color:#888;font-size:0.85em;font-weight:400">(${t.title_count} 🏆)</span>`;
     else if (t.runner_up_count) countStr = ` <span style="color:#888;font-size:0.85em;font-weight:400">(${t.runner_up_count} 🥈)</span>`;
@@ -767,7 +790,8 @@ function renderLeagueHistory(league) {
       <td class="${bg} team-cell" style="white-space:nowrap">
         <span style="margin-right:4px">${t.flag || ''}</span>${t.team}${countStr}${disputedTag}
       </td>
-      <td class="${bg} col-hide-mobile" style="font-variant-numeric:tabular-nums;white-space:nowrap;color:#888;font-size:0.85em">${rank}</td>
+      <td class="${bg} col-hide-mobile" style="font-variant-numeric:tabular-nums;white-space:nowrap;color:#888;font-size:0.85em">${ovrRank}</td>
+      <td class="${bg} col-hide-mobile" style="font-variant-numeric:tabular-nums;white-space:nowrap;color:#aaa;font-size:0.85em">${confRank}</td>
       <td class="${bg} rating-cell" style="font-variant-numeric:tabular-nums">${rating}</td>`;
   }
 
@@ -788,13 +812,16 @@ function renderLeagueHistory(league) {
       <thead><tr>
         <th>Year</th>
         <th class="col-champ">Champion</th>
-        <th class="col-champ col-hide-mobile">Rank</th>
+        <th class="col-champ col-hide-mobile">OVR #</th>
+        <th class="col-champ col-hide-mobile">Conf #</th>
         <th class="col-champ">Rating</th>
         <th class="col-ru">Runner-Up</th>
-        <th class="col-ru col-hide-mobile">Rank</th>
+        <th class="col-ru col-hide-mobile">OVR #</th>
+        <th class="col-ru col-hide-mobile">Conf #</th>
         <th class="col-ru">Rating</th>
         <th class="col-ru">3rd Place</th>
-        <th class="col-ru col-hide-mobile">Rank</th>
+        <th class="col-ru col-hide-mobile">OVR #</th>
+        <th class="col-ru col-hide-mobile">Conf #</th>
         <th class="col-ru">Rating</th>
       </tr></thead>
       <tbody>${rows}</tbody>
@@ -824,7 +851,7 @@ function renderGoat() {
     <td class="rank-cell">${displayRank++}</td>
     <td style="text-align:center;white-space:nowrap">${t.season}</td>
     <td class="team-cell"><span style="margin-right:4px">${t.flag || ''}</span>${t.team}</td>
-    <td>${confederationBadge(t.confederation)}</td>
+    <td>${confederationBadge(t.confederation, !!t.continental_winner)}</td>
     <td>${ratingBar(t.rating)}</td>
     <td class="col-hide-mobile" style="font-size:11px">${finishBadge(t.tournament_finishes)}</td>
   </tr>`).join('');
@@ -834,7 +861,7 @@ function renderGoat() {
       <thead><tr>
         <th style="text-align:center">All time rank</th>
         <th style="text-align:center">Year</th>
-        <th>Country</th><th>Confederation</th>
+        <th>Country</th><th>Conf</th>
         <th>Rating</th>
         <th class="col-hide-mobile">Honors</th>
       </tr></thead>
