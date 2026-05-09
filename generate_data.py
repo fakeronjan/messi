@@ -10,6 +10,7 @@ import pandas as pd
 import json
 import os
 import re
+from datetime import datetime, timezone
 from bisect import bisect_right
 
 os.makedirs('docs/data/teams', exist_ok=True)
@@ -480,6 +481,7 @@ seasons_meta = {
     # - last_date excludes future-scheduled fixtures present in the source data
     'first_date': str(df['date'].min()),
     'last_date':  str(df['date'].max()),
+    'generated_at': datetime.now(timezone.utc).isoformat(),
 }
 with open('docs/data/seasons_index.json', 'w') as f:
     json.dump(seasons_meta, f, separators=(',', ':'))
