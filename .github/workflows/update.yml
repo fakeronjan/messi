@@ -2,7 +2,7 @@ name: Update MESSI Ratings
 
 on:
   schedule:
-    - cron: '19 15 * * *'   # 15:19 UTC daily = 8:19 AM PDT (in-season) / 7:19 AM PST (off-season)
+    - cron: '19 9 * * *'    # 09:19 UTC daily — early slot to capture prior-day international evening matches faster (source is GitHub raw, not rate-limited)
   workflow_dispatch:        # allow manual trigger from GitHub UI
 
 permissions:
