@@ -344,6 +344,8 @@ for _, row in _eligible_rows.iterrows():
         'tournament':    row['tournament'],
         'rating_blend':  snap['rating_blend'],
         'rank_blend':    snap.get('rank_blend'),
+        'rating_era':    snap.get('rating_era'),
+        'rank_era':      snap.get('rank_era'),
         'confederation': snap.get('confederation', ''),
         'games_played':  int(snap.get('games_played', 0)),
         'date':          final_date,
@@ -366,6 +368,7 @@ for i, (_, r) in enumerate(eos_top.iterrows()):
         'confederation':       clean(r['confederation']),
         'season':              int(r['year']),
         'rating':              round(float(r['rating_blend']), 3),
+        'rating_era':          round(float(r['rating_era']), 3) if pd.notna(r.get('rating_era')) else None,
         'tournament_finishes': country_year_finishes(r['country'], r['year']),
     })
 with open('docs/data/goat_teams.json', 'w') as f:
