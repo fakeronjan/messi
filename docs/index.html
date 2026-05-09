@@ -747,7 +747,7 @@ function renderLeagueHistory(league) {
   function teamCell(t, bg) {
     if (!t) return `<td class="${bg}" colspan="3" style="text-align:center;color:#aaa">—</td>`;
     const rating  = t.rating != null ? t.rating.toFixed(2) : '—';
-    const rank    = t.rank   != null ? `#${t.rank}` : '—';
+    const rank    = t.rank   != null ? `${t.rank}` : '—';
     let countStr = '';
     if (t.title_count) countStr = ` <span style="color:#888;font-size:0.85em;font-weight:400">(${t.title_count} 🏆)</span>`;
     else if (t.runner_up_count) countStr = ` <span style="color:#888;font-size:0.85em;font-weight:400">(${t.runner_up_count} 🥈)</span>`;
