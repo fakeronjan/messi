@@ -501,6 +501,16 @@ def country_tournament_info(country, tournament, year):
     }
 
 
+# Disputed / administratively-awarded titles. Each entry surfaces a small
+# "(disputed)" tag in the Tournaments tab next to that team's listing.
+# Format: (tournament, year, finish_pos, team) → short reason string.
+DISPUTED_TITLES = {
+    ('African Cup of Nations', 2026, 1, 'Morocco'):
+        'Awarded by CAF in March 2026 after Senegal walk-off; Senegal originally won 1-0 on the field.',
+    ('African Cup of Nations', 2026, 2, 'Senegal'):
+        'Original on-field winner (1-0 vs Morocco); title stripped by CAF in March 2026.',
+}
+
 # Group by tournament; for each, list editions newest-first
 champions = {}
 for tournament in sorted(podiums['tournament'].unique()):
@@ -512,24 +522,28 @@ for tournament in sorted(podiums['tournament'].unique()):
         second = yp[yp['finish'] == 2]['team'].iloc[0] if len(yp[yp['finish'] == 2]) else None
         third  = yp[yp['finish'] == 3]['team'].iloc[0] if len(yp[yp['finish'] == 3]) else None
 
-        def team_block(team_name, _tour=tournament, _yr=year):
+        def team_block(team_name, finish_pos, _tour=tournament, _yr=year):
             if not team_name:
                 return None
             info = country_tournament_info(team_name, _tour, _yr)
-            return {
+            block = {
                 'team':          team_name,
                 'flag':          country_flag(team_name),
                 'confederation': info['confederation'],
                 'rating':        info['rating'],
                 'rank':          info['rank'],
             }
+            disputed = DISPUTED_TITLES.get((_tour, _yr, finish_pos, team_name))
+            if disputed:
+                block['disputed'] = disputed
+            return block
 
         entries.append({
             'season':     int(year),
             'host_flags': host_flags(tournament, year),
-            'champion':   team_block(first),
-            'runner_up':  team_block(second),
-            'third':      team_block(third),
+            'champion':   team_block(first,  1),
+            'runner_up':  team_block(second, 2),
+            'third':      team_block(third,  3),
         })
     champions[tournament] = entries
 
