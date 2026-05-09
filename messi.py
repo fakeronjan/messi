@@ -11,7 +11,7 @@ import numpy as np
 if not hasattr(np, 'int'):   np.int = int
 if not hasattr(np, 'float'): np.float = float
 if not hasattr(np, 'bool'):  np.bool = bool
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import warnings
 warnings.filterwarnings('ignore')
 import rankit
@@ -404,13 +404,18 @@ df['away_last_match'] = (
     ' (' + df['tournament'] + ')'
 )
 
-# Build a lookup: (date, team) -> last_match string
+# Build a lookup: (date, team) -> last_match string. Season included so the
+# downstream merge_asof can scope carry-forward to within the team's same
+# season (calendar year for MESSI) — at the start of a new year, teams that
+# haven't played yet correctly show empty rather than their last result from
+# the prior year.
 lastmatch_home = df[['date', 'home_team', 'home_last_match']].copy()
 lastmatch_home.columns = ['date', 'name', 'last_match']
 lastmatch_away = df[['date', 'away_team', 'away_last_match']].copy()
 lastmatch_away.columns = ['date', 'name', 'last_match']
 lastmatch_df = pd.concat([lastmatch_home, lastmatch_away], axis=0).reset_index(drop=True)
 lastmatch_df['date'] = pd.to_datetime(lastmatch_df['date']).dt.date
+lastmatch_df['season'] = pd.to_datetime(lastmatch_df['date']).apply(lambda d: d.year)
 
 # ============================================================
 # STEP 8 - ROLLING MASSEY RATINGS (MESSI RATINGS)
@@ -858,7 +863,14 @@ for (tournament, year), group in podium_df.groupby(['tournament', 'year']):
             final = cand._asdict() if hasattr(cand, '_asdict') else dict(zip(final_games.columns, cand))
             break
     if final is None:
-        # Fall back to the last game on the last date (original behavior).
+        # Bracket-walk failed (couldn't validate two semifinal winners). This
+        # happens for in-progress tournaments where the data hasn't reached
+        # the knockout stage yet. Only fall back to "last game on last date"
+        # if the tournament is conclusively complete — at least 14 days past
+        # its latest match. Otherwise skip and avoid awarding a fake medal.
+        last_dt = last_date.date() if hasattr(last_date, 'date') else last_date
+        if (date.today() - last_dt).days < 14:
+            continue
         final = final_games.iloc[-1].to_dict()
 
     home = final['home_team']
@@ -995,7 +1007,7 @@ final_df = pd.merge_asof(
     lastmatch_df_sorted.rename(columns={'date': 'match_date'}),
     left_on='date',
     right_on='match_date',
-    by='name',
+    by=['name', 'season'],
     direction='backward'
 )
 final_df['last_match'] = final_df['last_match'].fillna('No competitive match yet')
