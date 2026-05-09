@@ -479,7 +479,10 @@ for _t in PODIUM_TOURNAMENTS:
     if _tg.empty:
         continue
     for _y, _grp in _tg.groupby(_tg['date'].apply(lambda d: d.year)):
-        _tournament_final_date_by_yt[(_t, int(_y))] = _grp['date'].max()
+        # Normalize to datetime.date so comparisons against df['date'] (also
+        # datetime.date from line 20) succeed. Without this, every champion
+        # entry's rating/rank renders null because Timestamp != date.
+        _tournament_final_date_by_yt[(_t, int(_y))] = _grp['date'].max().date()
 
 
 def country_tournament_info(country, tournament, year):

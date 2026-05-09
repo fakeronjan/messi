@@ -642,8 +642,8 @@ function renderTeamTable() {
     <td class="last-match-cell">
       <span class="${resultClass(g.last_match)}">${g.last_match || '—'}</span>
     </td>
-    <td>${ratingBar(g.rating)}</td>
     <td class="rank-cell">${g.rank}</td>
+    <td>${ratingBar(g.rating)}</td>
     <td class="col-hide-mobile" style="font-size:11px">${finishBadge(g.tournament_finishes)}</td>
   </tr>`).join('');
 
@@ -651,7 +651,7 @@ function renderTeamTable() {
     <table>
       <thead><tr>
         <th>Date</th><th>Year</th><th>Last Match</th>
-        <th>Rating</th><th>Rank</th>
+        <th>Rank</th><th>Rating</th>
         <th class="col-hide-mobile">Honors</th>
       </tr></thead>
       <tbody>${tableRows}</tbody>
