@@ -217,9 +217,12 @@
     color: #555;
     max-width: 240px;
   }
-  .result-W { color: #2e7d32; font-weight: 700; }
-  .result-L { color: #c62828; font-weight: 700; }
-  .result-D { color: #f57f17; font-weight: 700; }
+  .result-W       { color: #2e7d32; font-weight: 700; }
+  .result-L       { color: #c62828; font-weight: 700; }
+  .result-D       { color: #f57f17; font-weight: 700; }
+  .result-W-stale { color: #2e7d32; font-weight: 400; }
+  .result-L-stale { color: #c62828; font-weight: 400; }
+  .result-D-stale { color: #f57f17; font-weight: 400; }
 
   /* Season chart */
   #chart-wrap {
@@ -441,12 +444,13 @@ function finishBadge(finishes) {
   ).join(' ');
 }
 
-function resultClass(match) {
+function resultClass(match, isStale) {
   if (!match) return '';
   const first = match[0];
-  if (first === 'W') return 'result-W';
-  if (first === 'L') return 'result-L';
-  if (first === 'D') return 'result-D';
+  const suffix = isStale ? '-stale' : '';
+  if (first === 'W') return 'result-W' + suffix;
+  if (first === 'L') return 'result-L' + suffix;
+  if (first === 'D') return 'result-D' + suffix;
   return '';
 }
 
@@ -523,7 +527,7 @@ async function loadSeason(season) {
     [...snaps].reverse().forEach(snap => {
       const opt = document.createElement('option');
       opt.value = snap.date;
-      opt.textContent = snap.label ? `${snap.date} — ${snap.label}` : snap.date;
+      opt.textContent = snap.label ? `${snap.date} | ${snap.label}` : snap.date;
       dateSel.appendChild(opt);
     });
     selectSnapshot(snaps[snaps.length - 1].date);
@@ -554,8 +558,13 @@ function renderStandings() {
   let teams = currentSnapshot.teams;
   if (confed !== 'all') teams = teams.filter(t => t.confederation === confed);
 
+  const snaps = currentSeasonData.snapshots;
+  const idx = snaps.findIndex(s => s.date === currentSnapshot.date);
+  const prevDate = idx > 0 ? snaps[idx - 1].date : null;
+
   const rows = teams.map(t => {
     const cRank = confRankMap[t.team] || '—';
+    const isStale = !!(prevDate && t.last_match_date && t.last_match_date <= prevDate);
     return `<tr>
       <td class="rank-cell">${t.rank != null ? t.rank : '—'}</td>
       <td class="rank-cell col-hide-mobile">${cRank}</td>
@@ -563,7 +572,7 @@ function renderStandings() {
       <td>${confederationBadge(t.confederation, !!t.continental_winner)}</td>
       <td>${ratingBar(t.rating)}</td>
       <td class="last-match-cell">
-        <span class="${resultClass(t.last_match)}">${t.last_match || '—'}</span>
+        <span class="${resultClass(t.last_match, isStale)}">${t.last_match || '—'}</span>
       </td>
       <td class="col-hide-mobile" style="font-size:11px;color:#888;white-space:nowrap">${t.last_match_date || ''}</td>
       <td class="col-hide-mobile" style="font-size:11px">${finishBadge(t.tournament_finishes)}</td>
