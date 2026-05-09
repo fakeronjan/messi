@@ -24,13 +24,6 @@ from rankit.Ranker import MasseyRanker
 
 start_date         = '1980-01-01'   # first date to include in dataset
 window_game_days   = 200            # rolling game-day window (matches ZIDANE architecture)
-window_game_days_era = 400          # PRIME+ERA pattern (mirrors DILLON's REACT/HOTTAKE):
-                                    # PRIME = current 200-day window (~4 yrs, captures peak year);
-                                    # ERA   = doubled window (~8 yrs) capturing sustained generational
-                                    #         excellence. Spain dynasty / France '98-'00 etc. show up
-                                    #         differently in ERA than PRIME — short hot tournament
-                                    #         years (1993 Mexico) get pulled down toward their actual
-                                    #         long-run level.
 margin_cap         = 5              # max goal margin fed into Massey
 shootout_margin    = 0.5            # margin assigned to a shootout win (AET level, shootout decides)
 min_games          = 5              # minimum games in window for a team to appear in output
@@ -804,106 +797,6 @@ messi3_df.to_csv('messi3_ratings.csv', index=False)
 print("messi3_ratings.csv saved!")
 
 # ============================================================
-# STEP 8h - BUILD MESSI_ERA RATINGS (long-window cycle view)
-# ============================================================
-# Mirrors DILLON's REACT/HOTTAKE pattern: PRIME = current 200-day window
-# (single peak year), ERA = doubled 400-day window (~8-yr generation).
-# Captures sustained excellence across cycles — Spain '08-'12 dynasty,
-# France '98-'00, Argentina '21-'24 — and dampens single-tournament hot
-# years (1993 Mexico, 2008 Egypt) by averaging them against pre/post
-# baselines. Same input data + tournament weighting as MESSI2.
-
-print("\n=== Computing MESSI_ERA ratings (400-day window) ===")
-try:
-    messi_era_df = pd.read_csv('messi_era_ratings.csv.gz')
-    max_date_id_era_ranked = int(messi_era_df['ranking_id'].max())
-    min_date_id_era_ranked = int(messi_era_df['ranking_id'].min())
-    print(f"Existing MESSI_ERA ratings found. Ranked IDs: {min_date_id_era_ranked} to {max_date_id_era_ranked}")
-except FileNotFoundError:
-    messi_era_df = pd.DataFrame(columns=['ranking_id', 'ranking_date', 'season', 'name', 'rating', 'rank'])
-    max_date_id_era_ranked = -1
-    min_date_id_era_ranked = -1
-    print("No existing MESSI_ERA ratings found - running full history from scratch.")
-
-last_printed_ym_era = ''
-for i in range(min_date_id, max_date_id2 + 1):
-
-    if min_date_id_era_ranked <= i <= max_date_id_era_ranked:
-        continue
-
-    current_date_era = df2.loc[df2['grouped_date_id'] == i, 'date'].max()
-    if pd.isnull(current_date_era) or len(df2.loc[df2['grouped_date_id'] == i]) == 0:
-        continue
-
-    working_era_df = df2.loc[
-        (df2['grouped_date_id'] >= i - window_game_days_era + 1) &
-        (df2['grouped_date_id'] <= i)
-    ].copy()
-
-    if len(working_era_df) < 10:
-        continue
-
-    working_era_df['game_days_ago'] = i - working_era_df['grouped_date_id']
-    working_era_df['date_weight']   = 1 - (working_era_df['game_days_ago'] / window_game_days_era)
-
-    working_era_df['weighted_margin_home'] = (
-        working_era_df['adj_margin_home'] *
-        working_era_df['date_weight'] *
-        working_era_df['tournament_weight']
-    )
-    working_era_df['weighted_margin_away'] = -working_era_df['weighted_margin_home']
-
-    working_era_df = working_era_df[working_era_df['weighted_margin_home'] != 0]
-    if len(working_era_df) < 10:
-        continue
-
-    season_era = current_date_era.year
-
-    current_ym_era = current_date_era.strftime('%Y-%m')
-    if current_ym_era != last_printed_ym_era:
-        pct_era = round(100 * i / max_date_id2)
-        print(f"  MESSI_ERA: {current_date_era.strftime('%B %Y')} ({pct_era}% complete)")
-        last_printed_ym_era = current_ym_era
-
-    try:
-        soccer_table_era = Table(
-            working_era_df,
-            ['home_team', 'away_team', 'weighted_margin_home', 'weighted_margin_away']
-        )
-        ranked_era = MasseyRanker(soccer_table_era).rank()
-
-        if ranked_era['rating'].isna().any() or np.isinf(ranked_era['rating']).any():
-            continue
-
-        ranked_era['ranking_id']   = i
-        ranked_era['ranking_date'] = current_date_era.date()
-        ranked_era['season']       = season_era
-
-        # Games played in the rolling window (used downstream for min_games filter)
-        home_gp_era = working_era_df.groupby('home_team').size().reset_index(name='gp_home')
-        away_gp_era = working_era_df.groupby('away_team').size().reset_index(name='gp_away')
-        home_gp_era.columns = ['name', 'gp_home']
-        away_gp_era.columns = ['name', 'gp_away']
-        gp_era = pd.merge(home_gp_era, away_gp_era, on='name', how='outer').fillna(0)
-        gp_era['games_played_era'] = (gp_era['gp_home'] + gp_era['gp_away']).astype(int)
-        ranked_era = pd.merge(ranked_era, gp_era[['name', 'games_played_era']], on='name', how='left')
-        ranked_era['games_played_era'] = ranked_era['games_played_era'].fillna(0).astype(int)
-
-        messi_era_df = pd.concat([messi_era_df, ranked_era], axis=0, sort=False).reset_index(drop=True)
-
-    except Exception as e:
-        print(f"  MESSI_ERA: skipping date ID {i} due to solver error: {e}")
-        continue
-
-messi_era_df.sort_values(['ranking_id', 'name'], ascending=[True, True], inplace=True)
-messi_era_df.drop_duplicates(subset=None, keep='first', inplace=True)
-messi_era_df['ranking_date'] = pd.to_datetime(messi_era_df['ranking_date']).dt.date
-messi_era_df.rename(columns={'rating': 'rating_era', 'rank': 'rank_era'}, inplace=True)
-
-messi_era_df.to_csv('messi_era_ratings.csv.gz', index=False)
-print("messi_era_ratings.csv.gz saved!")
-
-# ============================================================
 # STEP 9 - TOURNAMENT PODIUM FLAGS
 # ============================================================
 # For each edition of every PODIUM_TOURNAMENT, identify 1st, 2nd, and 3rd place.
@@ -1082,17 +975,6 @@ final_df = pd.merge_asof(
 )
 final_df.drop(columns=['ranking_date'], inplace=True)
 
-# Merge ERA rating (long-window) — same merge_asof pattern
-messi_era_slim = messi_era_df[['ranking_date', 'name', 'rating_era', 'rank_era', 'games_played_era']].copy()
-messi_era_slim['ranking_date'] = pd.to_datetime(messi_era_slim['ranking_date'])
-messi_era_slim = messi_era_slim.sort_values('ranking_date')
-final_df = pd.merge_asof(
-    final_df, messi_era_slim,
-    left_on='date', right_on='ranking_date',
-    by='name', direction='backward',
-)
-final_df.drop(columns=['ranking_date'], inplace=True)
-
 # Add confederation (must happen before name is renamed to country)
 final_df['confederation'] = final_df['name'].map(CONFEDERATION_MAP).fillna('Unknown')
 
@@ -1134,14 +1016,11 @@ final_df.rename(columns={'name': 'country'}, inplace=True)
 # Z-score normalized blend: each model standardized within its snapshot first,
 # then equal-weighted averaged. Standardization makes the three models
 # scale-comparable so no single model's outliers (e.g. MESSI3 Cuba 1996) dominate.
-for _col in ('rating', 'rating2', 'rating3', 'rating_era'):
+for _col in ('rating', 'rating2', 'rating3'):
     grp = final_df.groupby('ranking_id')[_col]
     final_df[_col + '_z'] = (final_df[_col] - grp.transform('mean')) / grp.transform('std')
 
 final_df['rating_blend'] = final_df[['rating_z', 'rating2_z', 'rating3_z']].mean(axis=1, skipna=True)
-# ERA stays as a single-rating z-score (no blend) so its scale matches PRIME and
-# the two are visually comparable on the GOAT tab. ~1.0 = elite, ~2.0 = peak.
-final_df['rating_era'] = final_df['rating_era_z']
 final_df['rank_blend'] = (
     final_df[final_df['rating_blend'].notna()]
     .groupby('ranking_id')['rating_blend']
@@ -1194,8 +1073,7 @@ final_df = final_df[[
     'rating',  'rank',                                           # MESSI1 (competitive)
     'rating2', 'rank2',                                          # MESSI2 (all matches)
     'rating3', 'rank3',                                          # MESSI3 (WC qualifying + finals only)
-    'rating_blend', 'rank_blend',                                # PRIME (z-blend of MESSI1/2/3, 200-day window)
-    'rating_era',   'rank_era',                                  # ERA (single rating, 400-day window — sustained generation)
+    'rating_blend', 'rank_blend',
     'games_played',
     'last_match_date', 'last_match', 'is_game_day',
     'most_recent', 'is_world_cup_final_day',

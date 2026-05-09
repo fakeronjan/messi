@@ -271,7 +271,7 @@
 <header>
   <h1>MESSI 🌍⚽</h1>
   <p class="subtitle">International Soccer Power Rankings · Alpha</p>
-  <p class="model-note">Two ratings — PRIME (~4-yr window, single peak year) and ERA (~8-yr window, sustained generation) — both considering opponent strength, margin, and recency across all FIFA matches since 1986. ~1.0 = top-10 nation; ~2.0+ = generational peak (Germany 2014 = 2.50).</p>
+  <p class="model-note">Considers strength of opponent, margin, and recency across all FIFA matches since 1986. ~1.0 = top-10 nation; ~2.0+ = generational peak (Germany 2014 = 2.50).</p>
   <p class="updated" id="last-updated">Loading...</p>
 </header>
 
@@ -820,20 +820,14 @@ function renderGoat() {
   if (goatConf !== 'all') teams = teams.filter(t => t.confederation === goatConf);
 
   let displayRank = 1;
-  const rows = teams.map(t => {
-    const eraVal = t.rating_era != null
-      ? `<span style="font-variant-numeric:tabular-nums">${t.rating_era.toFixed(2)}</span>`
-      : '<span style="color:#bbb">—</span>';
-    return `<tr>
-      <td class="rank-cell">${displayRank++}</td>
-      <td style="text-align:center;white-space:nowrap">${t.season}</td>
-      <td class="team-cell"><span style="margin-right:4px">${t.flag || ''}</span>${t.team}</td>
-      <td>${confederationBadge(t.confederation)}</td>
-      <td>${ratingBar(t.rating)}</td>
-      <td class="rating-cell col-hide-mobile" style="color:#a44;font-variant-numeric:tabular-nums">${eraVal}</td>
-      <td class="col-hide-mobile" style="font-size:11px">${finishBadge(t.tournament_finishes)}</td>
-    </tr>`;
-  }).join('');
+  const rows = teams.map(t => `<tr>
+    <td class="rank-cell">${displayRank++}</td>
+    <td style="text-align:center;white-space:nowrap">${t.season}</td>
+    <td class="team-cell"><span style="margin-right:4px">${t.flag || ''}</span>${t.team}</td>
+    <td>${confederationBadge(t.confederation)}</td>
+    <td>${ratingBar(t.rating)}</td>
+    <td class="col-hide-mobile" style="font-size:11px">${finishBadge(t.tournament_finishes)}</td>
+  </tr>`).join('');
 
   document.getElementById('goat-table-wrap').innerHTML = `
     <table>
@@ -841,8 +835,7 @@ function renderGoat() {
         <th style="text-align:center">All time rank</th>
         <th style="text-align:center">Year</th>
         <th>Country</th><th>Confederation</th>
-        <th>PRIME</th>
-        <th class="col-hide-mobile">ERA</th>
+        <th>Rating</th>
         <th class="col-hide-mobile">Honors</th>
       </tr></thead>
       <tbody>${rows}</tbody>
