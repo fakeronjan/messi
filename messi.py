@@ -31,6 +31,11 @@ min_games          = 5              # minimum games in window for a team to appe
                                     #  games in window and got filtered. Mexico 1990 type artifacts are already
                                     #  filtered naturally by the Massey solver since they have no games in window.)
 friendly_weight    = 0.75           # MESSI2 only: weight for friendlies vs competitive games
+
+# Re-process the most recent N ranking_ids (game-days) on every run so late-
+# arriving data is absorbed. International games can post hours after final
+# whistle and FIFA windows sometimes settle over multiple days.
+RECOMPUTE_TAIL_DAYS = 7
 data_url           = 'https://raw.githubusercontent.com/martj42/international_results/master/results.csv'
 shootouts_url      = 'https://raw.githubusercontent.com/martj42/international_results/master/shootouts.csv'
 
@@ -431,9 +436,17 @@ min_date_id = 1  # start from first date that has a full window's worth of histo
 # Load existing ratings if available, otherwise start fresh
 try:
     messi_df = pd.read_csv('messi_ratings.csv')
-    max_date_id_ranked = int(messi_df['ranking_id'].max())
-    min_date_id_ranked = int(messi_df['ranking_id'].min())
-    print(f"Existing ratings found. Ranked IDs: {min_date_id_ranked} to {max_date_id_ranked}")
+    all_ids = sorted(messi_df['ranking_id'].unique())
+    if len(all_ids) > RECOMPUTE_TAIL_DAYS:
+        tail_threshold = all_ids[-RECOMPUTE_TAIL_DAYS]
+        n_dropped = int((messi_df['ranking_id'] >= tail_threshold).sum())
+        messi_df = messi_df[messi_df['ranking_id'] < tail_threshold].copy()
+        print(f"  Re-processing tail {RECOMPUTE_TAIL_DAYS} game-days "
+              f"({n_dropped:,} rows dropped from cache for late-arriving-data refresh)")
+    max_date_id_ranked = int(messi_df['ranking_id'].max()) if not messi_df.empty else -1
+    min_date_id_ranked = int(messi_df['ranking_id'].min()) if not messi_df.empty else -1
+    if max_date_id_ranked >= 0:
+        print(f"Existing ratings found. Ranked IDs: {min_date_id_ranked} to {max_date_id_ranked}")
 except FileNotFoundError:
     messi_df = pd.DataFrame(columns=['ranking_id', 'ranking_date', 'season', 'name', 'rating', 'rank'])
     max_date_id_ranked = -1
@@ -583,9 +596,17 @@ max_date_id2 = int(df2['grouped_date_id'].max())
 
 try:
     messi2_df = pd.read_csv('messi2_ratings.csv.gz')
-    max_date_id2_ranked = int(messi2_df['ranking_id'].max())
-    min_date_id2_ranked = int(messi2_df['ranking_id'].min())
-    print(f"Existing MESSI2 ratings found. Ranked IDs: {min_date_id2_ranked} to {max_date_id2_ranked}")
+    all_ids = sorted(messi2_df['ranking_id'].unique())
+    if len(all_ids) > RECOMPUTE_TAIL_DAYS:
+        tail_threshold = all_ids[-RECOMPUTE_TAIL_DAYS]
+        n_dropped = int((messi2_df['ranking_id'] >= tail_threshold).sum())
+        messi2_df = messi2_df[messi2_df['ranking_id'] < tail_threshold].copy()
+        print(f"  Re-processing tail {RECOMPUTE_TAIL_DAYS} game-days "
+              f"({n_dropped:,} rows dropped from MESSI2 cache for late-arriving-data refresh)")
+    max_date_id2_ranked = int(messi2_df['ranking_id'].max()) if not messi2_df.empty else -1
+    min_date_id2_ranked = int(messi2_df['ranking_id'].min()) if not messi2_df.empty else -1
+    if max_date_id2_ranked >= 0:
+        print(f"Existing MESSI2 ratings found. Ranked IDs: {min_date_id2_ranked} to {max_date_id2_ranked}")
 except FileNotFoundError:
     messi2_df = pd.DataFrame(columns=['ranking_id', 'ranking_date', 'season', 'name', 'rating', 'rank'])
     max_date_id2_ranked = -1
