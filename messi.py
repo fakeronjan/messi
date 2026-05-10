@@ -1010,7 +1010,7 @@ final_df = pd.merge_asof(
     by=['name', 'season'],
     direction='backward'
 )
-final_df['last_match'] = final_df['last_match'].fillna('No competitive match yet')
+final_df['last_match'] = final_df['last_match'].fillna('')
 final_df['last_match_date'] = final_df['match_date'].dt.date
 final_df.drop(columns=['match_date'], inplace=True)
 final_df['date'] = final_df['date'].dt.date
