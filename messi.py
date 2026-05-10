@@ -596,6 +596,11 @@ max_date_id2 = int(df2['grouped_date_id'].max())
 
 try:
     messi2_df = pd.read_csv('messi2_ratings.csv.gz')
+    # Cache was saved post-rename (rating2/rank2). New rows get appended
+    # in the loop with the un-renamed schema (rating/rank), so we revert
+    # the cache to match. The final rename at end of section then unifies
+    # everything to rating2/rank2 cleanly.
+    messi2_df.rename(columns={'rating2': 'rating', 'rank2': 'rank'}, inplace=True)
     all_ids = sorted(messi2_df['ranking_id'].unique())
     if len(all_ids) > RECOMPUTE_TAIL_DAYS:
         tail_threshold = all_ids[-RECOMPUTE_TAIL_DAYS]
@@ -741,6 +746,8 @@ max_date_id3 = int(df3['grouped_date_id'].max())
 
 try:
     messi3_df = pd.read_csv('messi3_ratings.csv')
+    # See MESSI2 cache-load comment above — same un-rename pattern.
+    messi3_df.rename(columns={'rating3': 'rating', 'rank3': 'rank'}, inplace=True)
     max_date_id3_ranked = int(messi3_df['ranking_id'].max())
     min_date_id3_ranked = int(messi3_df['ranking_id'].min())
     print(f"Existing MESSI3 ratings found. Ranked IDs: {min_date_id3_ranked} to {max_date_id3_ranked}")
