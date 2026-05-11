@@ -266,7 +266,7 @@ df['is_end_of_season'] = df['date'].apply(lambda d: 1 if d in _tournament_final_
 print(f"Tournament-end snapshot dates: {len(_tournament_final_dates)}")
 
 # Confederation rank within each ranking_id snapshot
-df['conf_rank'] = df.groupby(['ranking_id', 'confederation'])['rating_blend'] \
+df['conf_rank'] = df.groupby(['ranking_id', 'confederation'])['rating'] \
                     .rank(method='min', ascending=False)
 
 # Continental winners: (team, year) tuples for any non-WC tournament won.
@@ -285,18 +285,18 @@ _continental_winners = set(
 # ── 1. Current standings ─────────────────────────────────────────────────────
 print("Writing current_standings.json...")
 latest_id = int(df['ranking_id'].max())
-latest = df[df['ranking_id'] == latest_id].sort_values('rank_blend').copy()
+latest = df[df['ranking_id'] == latest_id].sort_values('rank').copy()
 latest_date = str(latest['date'].iloc[0])
 
 standings_data = {
     'updated': latest_date,
     'teams': [
         {
-            'rank':                int(r['rank_blend']) if not pd.isna(r['rank_blend']) else None,
+            'rank':                int(r['rank']) if not pd.isna(r['rank']) else None,
             'team':                r['country'],
             'flag':                country_flag(r['country']),
             'confederation':       clean(r['confederation']),
-            'rating':              round(float(r['rating_blend']), 3) if not pd.isna(r['rating_blend']) else None,
+            'rating':              round(float(r['rating']), 3) if not pd.isna(r['rating']) else None,
             'games_played':        int(r['games_played']) if not pd.isna(r['games_played']) else 0,
             'last_match':          clean(r['last_match']),
             'last_match_date':     clean(r['last_match_date']),
@@ -310,12 +310,11 @@ with open('docs/data/current_standings.json', 'w') as f:
     json.dump(standings_data, f, separators=(',', ':'))
 
 # ── 2. GOAT table (top 50 country-year ratings at end of major tournaments) ─
-# Eligibility: must win a major tournament that year, OR finish 2nd in the
-# FIFA World Cup specifically. Each team is then anchored at the SPECIFIC
-# tournament's final date (the moment they actually won the trophy) — not
-# whichever snapshot in the year had the highest rating. If a team is
-# eligible via multiple tournaments in one year (e.g. USA 2021 won Gold Cup
-# AND CONCACAF Nations League), we use the rating from whichever is highest.
+# Eligibility: medaled (1st, 2nd, or 3rd) in any major tournament that year.
+# Each team is then anchored at the SPECIFIC tournament's final date (the
+# moment they actually finished on the podium) — not whichever snapshot in
+# the year had the highest rating. If a team medaled in multiple tournaments
+# in one year, we use the rating from whichever is highest.
 #
 # Also requires games_played >= 6 in the rolling window — filters teams
 # whose Massey rating comes from too small a sample of weak-confederation
@@ -324,15 +323,14 @@ print("Writing goat_teams.json...")
 podiums = pd.read_csv('tournament_podiums.csv')
 GOAT_MIN_GAMES = 6
 
-# Build the eligibility list: each row is one qualifying (country, year, tournament).
-# WC: 1st OR 2nd qualifies. All other tournaments: only 1st qualifies.
-_wc_eligible = podiums[
-    (podiums['tournament'] == 'FIFA World Cup') & (podiums['finish'].isin([1, 2]))
-][['team', 'year', 'tournament']]
-_other_eligible = podiums[
-    (podiums['tournament'] != 'FIFA World Cup') & (podiums['finish'] == 1)
-][['team', 'year', 'tournament']]
-_eligible_rows = pd.concat([_wc_eligible, _other_eligible]).drop_duplicates()
+# Medalist gate: 1st, 2nd, or 3rd in any major tournament. Matches the
+# cross-site GOAT convention established 2026-05-11 — every other site
+# filters its GOAT to "teams that contested for the championship" and this
+# is the soccer-international equivalent (medal = reached knockout rounds).
+_eligible_rows = (
+    podiums[podiums['finish'].isin([1, 2, 3])][['team', 'year', 'tournament']]
+    .drop_duplicates()
+)
 
 # For each eligible row, pull the team's rating at THAT tournament's final
 # date. Skip if games_played < GOAT_MIN_GAMES at the snapshot.
@@ -352,7 +350,7 @@ for _, row in _eligible_rows.iterrows():
         continue
     if isinstance(snap, pd.DataFrame):
         snap = snap.iloc[0]
-    if pd.isna(snap.get('rating_blend')):
+    if pd.isna(snap.get('rating')):
         continue
     if snap.get('games_played', 0) < GOAT_MIN_GAMES:
         continue
@@ -360,8 +358,8 @@ for _, row in _eligible_rows.iterrows():
         'country':       row['team'],
         'year':          int(row['year']),
         'tournament':    row['tournament'],
-        'rating_blend':  snap['rating_blend'],
-        'rank_blend':    snap.get('rank_blend'),
+        'rating':  snap['rating'],
+        'rank':    snap.get('rank'),
         'confederation': snap.get('confederation', ''),
         'games_played':  int(snap.get('games_played', 0)),
         'date':          final_date,
@@ -369,7 +367,7 @@ for _, row in _eligible_rows.iterrows():
 
 eos_top = (
     pd.DataFrame(candidate_records)
-    .sort_values('rating_blend', ascending=False)
+    .sort_values('rating', ascending=False)
     .drop_duplicates(subset=['country', 'year'], keep='first')  # keep highest if multi-tournament year
     .head(50)
     .reset_index(drop=True)
@@ -383,7 +381,7 @@ for i, (_, r) in enumerate(eos_top.iterrows()):
         'flag':                country_flag(r['country']),
         'confederation':       clean(r['confederation']),
         'season':              int(r['year']),
-        'rating':              round(float(r['rating_blend']), 3),
+        'rating':              round(float(r['rating']), 3),
         'tournament_finishes': country_year_finishes(r['country'], r['year']),
         'continental_winner':  1 if (r['country'], int(r['year'])) in _continental_winners else 0,
     })
@@ -418,8 +416,8 @@ for team in all_teams:
         seasons[int(season)] = [
             {
                 'date':                str(r['date']),
-                'rating':              round(float(r['rating_blend']), 3) if not pd.isna(r['rating_blend']) else None,
-                'rank':                int(r['rank_blend']) if not pd.isna(r['rank_blend']) else None,
+                'rating':              round(float(r['rating']), 3) if not pd.isna(r['rating']) else None,
+                'rank':                int(r['rank']) if not pd.isna(r['rank']) else None,
                 'conf_rank':           int(r['conf_rank']) if not pd.isna(r['conf_rank']) else None,
                 'last_match':          clean(r['last_match']),
                 'is_end_of_season':    int(r['is_end_of_season']),
@@ -447,7 +445,7 @@ for season in all_seasons:
     sdf = df[df['year'] == season]
     snapshots = []
     for ranking_id, rdf in sdf.groupby('ranking_id'):
-        rdf = rdf.sort_values('rank_blend')
+        rdf = rdf.sort_values('rank')
         snap_date = str(rdf['date'].iloc[0])
         # Label: World Cup final day, end of even-year, or just date
         is_wc_final = int(rdf['is_world_cup_final_day'].iloc[0]) if 'is_world_cup_final_day' in rdf.columns else 0
@@ -456,11 +454,11 @@ for season in all_seasons:
             label = 'World Cup Final Day'
         teams_snap = [
             {
-                'rank':                int(r['rank_blend']) if not pd.isna(r['rank_blend']) else None,
+                'rank':                int(r['rank']) if not pd.isna(r['rank']) else None,
                 'team':                r['country'],
                 'flag':                country_flag(r['country']),
                 'confederation':       clean(r['confederation']),
-                'rating':              round(float(r['rating_blend']), 3) if not pd.isna(r['rating_blend']) else None,
+                'rating':              round(float(r['rating']), 3) if not pd.isna(r['rating']) else None,
                 'last_match':          clean(r['last_match']),
                 'last_match_date':     clean(r['last_match_date']),
                 'tournament_finishes': country_year_finishes(r['country'], r['year']),
@@ -519,8 +517,8 @@ def country_tournament_info(country, tournament, year):
         return {'rating': None, 'rank': None, 'conf_rank': None, 'confederation': ''}
     r = rows.iloc[0]
     return {
-        'rating':        round(float(r['rating_blend']), 3) if not pd.isna(r['rating_blend']) else None,
-        'rank':          int(r['rank_blend']) if not pd.isna(r['rank_blend']) else None,
+        'rating':        round(float(r['rating']), 3) if not pd.isna(r['rating']) else None,
+        'rank':          int(r['rank']) if not pd.isna(r['rank']) else None,
         'conf_rank':     int(r['conf_rank']) if not pd.isna(r['conf_rank']) else None,
         'confederation': clean(r['confederation']),
     }
