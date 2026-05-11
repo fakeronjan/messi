@@ -342,7 +342,7 @@ let teamCache         = {};
 let standingsConf  = 'all';
 let tsConf         = '';
 let goatConf       = 'all';
-let historyTourny  = '';
+let historyTourny  = 'FIFA World Cup';
 
 const CONF_OPTIONS = [
   { value: 'UEFA',     label: '🇪🇺 UEFA'     },
@@ -906,6 +906,7 @@ const onHistoryPick = v => { historyTourny = v; renderLeagueHistory(v); };
 buildPillsFromOpts('history-world-pills',       HISTORY_WORLD,       historyTourny, onHistoryPick, ['history-continental-pills', 'history-nations-pills']);
 buildPillsFromOpts('history-continental-pills', HISTORY_CONTINENTAL, historyTourny, onHistoryPick, ['history-world-pills', 'history-nations-pills']);
 buildPillsFromOpts('history-nations-pills',     HISTORY_NATIONS,     historyTourny, onHistoryPick, ['history-world-pills', 'history-continental-pills']);
+renderLeagueHistory(historyTourny);
 initStandings();
 loadTeamsIndex();
 loadChampions();
