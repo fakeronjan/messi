@@ -20,7 +20,7 @@ margin_cap         = 4              # max goal margin (matches ZIDANE / COBI soc
 shootout_margin    = 0.5            # margin assigned to a shootout win
 home_field_adv     = 0.5            # per-game HCA on raw goal margin
 min_games          = 5              # minimum games in window to appear in final output
-friendly_weight    = 0.5            # WLS observation weight applied to friendlies
+friendly_weight    = 0.25           # WLS observation weight applied to friendlies
                                     # (competitive games default to 1.0; tournament
                                     # tier uplift is multiplied on top via TOURNAMENT_WEIGHTS)
 
@@ -44,27 +44,26 @@ shootouts_url = 'https://raw.githubusercontent.com/martj42/international_results
 
 # WLS observation-weight uplifts for higher-tier tournaments. NOT applied
 # to margin — these encode "this game is a more reliable signal of team
-# strength" via observation weight in the WLS solve. Tier 1 = global pinnacle,
-# Tier 2 = continental championships. Everything else defaults to 1.0x.
+# strength" via observation weight in the WLS solve. Everything not listed
+# defaults to 1.0x (qualifiers, regional cups, FIFA Series, etc.).
 TOURNAMENT_WEIGHTS = {
-    # Tier 1 — 1.5x: highest-stakes global events
-    'FIFA World Cup':                    1.5,
-    'FIFA Confederations Cup':           1.5,
-    'CONMEBOL–UEFA Cup of Champions':    1.5,
+    # Tier 1 — 2.0x: global pinnacle
+    'FIFA World Cup':                    2.0,
 
-    # Tier 2 — 1.25x: continental championships (finals tournaments only)
-    'UEFA Euro':                         1.25,
-    'Copa América':                      1.25,
-    'African Cup of Nations':            1.25,
-    'AFC Asian Cup':                     1.25,
-    'Gold Cup':                          1.25,
-    'CONCACAF Championship':             1.25,
-    'Oceania Nations Cup':               1.25,
+    # Tier 2 — 1.5x: each confederation's peak championship (finals tournaments)
+    'UEFA Euro':                         1.5,
+    'Copa América':                      1.5,
+    'African Cup of Nations':            1.5,
+    'AFC Asian Cup':                     1.5,
+    'Gold Cup':                          1.5,
+    'CONCACAF Championship':             1.5,
+    'Oceania Nations Cup':               1.5,
+
+    # Tier 3 — 1.25x: marquee one-offs + biennial nations leagues
+    'FIFA Confederations Cup':           1.25,
+    'CONMEBOL–UEFA Cup of Champions':    1.25,
     'UEFA Nations League':               1.25,
     'CONCACAF Nations League':           1.25,
-    'FIFA Series':                       1.25,
-    'CONCACAF Series':                   1.25,
-    'Superclásico de las Américas':      1.25,
 }
 
 # Knockout tournaments with a final + third-place match — used for podium logic.
