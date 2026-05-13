@@ -785,6 +785,10 @@ async function loadChampions() {
   try {
     const res = await fetch(`${BASE}/champions.json`);
     championsData = await res.json();
+    // Init order runs renderLeagueHistory(historyTourny) before this
+    // fetch resolves — re-render now that the data is available so the
+    // pre-selected FIFA World Cup populates without an extra click.
+    renderLeagueHistory(historyTourny);
   } catch(e) {
     document.getElementById('history-table-wrap').innerHTML =
       `<p class="error">Could not load league history.</p>`;
