@@ -394,6 +394,17 @@ print("Writing per-team JSON files...")
 team_data = df[(df['is_game_day'] == 1) | (df['is_end_of_season'] == 1)].copy()
 team_data = team_data.sort_values(['country', 'date'])
 
+# (team, year) set of nations that actually played ≥1 game that year. Used to
+# drop "ghost" year entries — without this, defunct nations (Czechoslovakia
+# 1994 etc.) and live-but-inactive nations (Mongolia 2025-26 etc.) get a
+# carried-over year-end snapshot from the rolling window even though they
+# played zero games that year.
+played_team_years = set(
+    (str(t), int(y)) for t, y in
+    df.loc[df['is_game_day'] == 1, ['country', 'year']]
+      .dropna().itertuples(index=False, name=None)
+)
+
 all_teams = sorted(df['country'].unique())
 teams_index = []
 
@@ -411,6 +422,8 @@ for team in all_teams:
     for season, sdf in tdf.groupby('year'):
         if pd.isna(season):
             continue
+        if (str(team), int(season)) not in played_team_years:
+            continue  # skip ghost year — team played 0 games
         finishes_for_year = country_year_finishes(team, season)
         won_continental = (team, int(season)) in _continental_winners
         seasons[int(season)] = [
