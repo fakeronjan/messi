@@ -984,7 +984,7 @@ function renderLeagueHistory(league) {
   }).join('');
 
   const footnote = anyPreRated
-    ? '<p style="font-size:11px;color:#888;margin-top:8px"><sup>†</sup> Pre-1980 editions. Results shown for completeness; teams from these tournaments are not modeled in ratings (MESSI anchors at 1980).</p>'
+    ? '<p style="font-size:11px;color:#888;margin-top:8px"><sup>†</sup> Pre-1986 editions. Results shown for completeness; teams from these tournaments are not modeled in ratings (MESSI ratings start in 1986 once the 200-game-day rolling window fills).</p>'
     : '';
 
   document.getElementById('history-table-wrap').innerHTML = `
