@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MESSI — International Soccer Power Rankings</title>
+<title>MESSI - International Soccer Power Rankings</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -149,7 +149,7 @@
   }
   .team-cell { font-weight: 600; }
 
-  /* Clickable cells — deep-link to Team Summary / Standings */
+  /* Clickable cells - deep-link to Team Summary / Standings */
   .linked { cursor: pointer; }
   .linked:hover { text-decoration: underline; }
   .team-cell.linked, .team-link.linked { color: #1a6b8a; }
@@ -460,7 +460,7 @@ function resultClass(match, isStale) {
   return '';
 }
 
-// MESSI format: "L vs. Scotland 1-2 (FIFA World Cup qualification)" — full
+// MESSI format: "L vs. Scotland 1-2 (FIFA World Cup qualification)" - full
 // tournament tag preserved (no abbrevComp on this site). Opponent country
 // names match teamsIndex; flag emojis are kept in cell display but not in
 // last_match strings.
@@ -480,7 +480,7 @@ function renderLastMatch(raw, season, isStale) {
 }
 
 // ── Deep-link handlers ──────────────────────────────────────────────────────
-// MESSI Team Summary pill has no "All" option — must match the team's
+// MESSI Team Summary pill has no "All" option - must match the team's
 // confederation or populateTeams returns an empty dropdown.
 async function teamLinkClick(slug, season) {
   if (!slug) return;
@@ -524,7 +524,7 @@ function seasonLinkClick(season, targetConf) {
   document.getElementById('standings').classList.add('active');
   // If the source row carried a confederation context that maps to a Standings
   // pill option (UEFA / CONMEBOL / etc.), carry it through. FIFA World Cup
-  // (no single confederation) and 'all' don't map — leave the pill alone.
+  // (no single confederation) and 'all' don't map - leave the pill alone.
   if (targetConf && _STANDINGS_CONFS.has(targetConf)) {
     standingsConf = targetConf;
     buildConfPills('standings-conf-pills', true, standingsConf, v => {
@@ -537,7 +537,7 @@ function seasonLinkClick(season, targetConf) {
 }
 
 // Map a Tournaments-tab competition to a Standings confederation pill value.
-// Returns empty for FIFA World Cup (multi-confederation event — no mapping).
+// Returns empty for FIFA World Cup (multi-confederation event - no mapping).
 function tournamentConf(t) {
   if (!t) return '';
   if (t.startsWith('UEFA')) return 'UEFA';
@@ -904,7 +904,7 @@ async function loadChampions() {
     const res = await fetch(`${BASE}/champions.json`);
     championsData = await res.json();
     // Init order runs renderLeagueHistory(historyTourny) before this
-    // fetch resolves — re-render now that the data is available so the
+    // fetch resolves - re-render now that the data is available so the
     // pre-selected FIFA World Cup populates without an extra click.
     renderLeagueHistory(historyTourny);
   } catch(e) {
@@ -960,7 +960,7 @@ function renderLeagueHistory(league) {
 
   // Year-cell click on this tab jumps to Standings; if the tournament maps
   // to a confederation (Euros→UEFA etc.), carry it through. World Cup maps
-  // to nothing (multi-confederation) — leave Standings pill as-is.
+  // to nothing (multi-confederation) - leave Standings pill as-is.
   const targetConf = tournamentConf(league);
 
   let anyPreRated = false;
@@ -1071,7 +1071,7 @@ buildPillsFromOpts('history-world-pills',       HISTORY_WORLD,       historyTour
 buildPillsFromOpts('history-continental-pills', HISTORY_CONTINENTAL, historyTourny, onHistoryPick, ['history-world-pills', 'history-nations-pills']);
 buildPillsFromOpts('history-nations-pills',     HISTORY_NATIONS,     historyTourny, onHistoryPick, ['history-world-pills', 'history-continental-pills']);
 // Load teams_index first so opponent/slug lookups are populated before any
-// table renders — avoids a double-render flash on initial page load.
+// table renders - avoids a double-render flash on initial page load.
 (async () => {
   await loadTeamsIndex();
   renderLeagueHistory(historyTourny);
