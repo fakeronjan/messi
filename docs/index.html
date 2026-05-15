@@ -307,7 +307,7 @@
 <div id="team-summary" class="tab">
   <div class="league-pills" id="ts-conf-pills"></div>
   <div class="controls">
-    <select id="team-select" disabled><option value="">— Select a country —</option></select>
+    <select id="team-select" disabled><option value="">- Select a country -</option></select>
     <select id="season-select"><option value="all">All years</option></select>
     <select id="date-type-select">
       <option value="all">All dates</option>
@@ -572,7 +572,7 @@ function displayMatch(s) { return (!s || _PLACEHOLDER_LM.has(s)) ? '' : s; }
 const BAR_MIN = -5, BAR_MAX = 5, BAR_RANGE = 10;
 
 function ratingBar(rating) {
-  if (rating == null) return '<span style="color:#bbb">—</span>';
+  if (rating == null) return '<span style="color:#bbb">-</span>';
   const clipped = Math.max(BAR_MIN, Math.min(BAR_MAX, rating));
   // 0.0 sits at 50% of the track; each unit = 12.5% of track width
   let leftPct, widthPct;
@@ -679,7 +679,7 @@ function renderStandings() {
 
   const season = currentSeasonData && currentSeasonData.season;
   const rows = teams.map(t => {
-    const cRank = confRankMap[t.team] || '—';
+    const cRank = confRankMap[t.team] || '-';
     const isStale = !!(prevDate && t.last_match_date && t.last_match_date <= prevDate);
     const slug = nameToSlug[t.team];
     const cellInner = `<span style="margin-right:4px">${t.flag || ''}</span>${t.team}`;
@@ -687,7 +687,7 @@ function renderStandings() {
       ? `<td class="team-cell linked" data-team-slug="${slug}" data-season="${season}">${cellInner}</td>`
       : `<td class="team-cell">${cellInner}</td>`;
     return `<tr>
-      <td class="rank-cell">${t.rank != null ? t.rank : '—'}</td>
+      <td class="rank-cell">${t.rank != null ? t.rank : '-'}</td>
       <td class="rank-cell col-hide-mobile">${cRank}</td>
       ${teamTd}
       <td>${confederationBadge(t.confederation, !!t.continental_winner)}</td>
@@ -737,7 +737,7 @@ async function loadTeamsIndex() {
 
 function populateTeams(confederation) {
   const sel = document.getElementById('team-select');
-  sel.innerHTML = '<option value="">— Select a country —</option>';
+  sel.innerHTML = '<option value="">- Select a country -</option>';
   if (!confederation || !teamsIndex) { sel.disabled = true; return; }
   teamsIndex.filter(t => t.confederation === confederation).forEach(t => {
     const opt = document.createElement('option');
@@ -812,7 +812,7 @@ function renderTeamTable() {
     <td class="linked" data-season-link="${g.season}" data-target-conf="${targetConf}" style="font-size:11px;color:#555">${g.season}</td>
     <td class="last-match-cell">${renderLastMatch(g.last_match, g.season, false)}</td>
     <td class="rank-cell">${g.rank}</td>
-    <td class="rank-cell col-hide-mobile">${g.conf_rank != null ? g.conf_rank : '—'}</td>
+    <td class="rank-cell col-hide-mobile">${g.conf_rank != null ? g.conf_rank : '-'}</td>
     <td>${ratingBar(g.rating)}</td>
     <td class="col-hide-mobile" style="font-size:11px">${confBadge(data.confederation, g.continental_winner)}</td>
     <td class="col-hide-mobile" style="font-size:11px">${finishBadge(g.tournament_finishes)}</td>
@@ -926,7 +926,7 @@ function renderLeagueHistory(league) {
   const champEmoji = league === 'FIFA World Cup' ? '👑' : '🏆';
 
   function teamCell(t, bg, season, preRated) {
-    if (!t) return `<td class="${bg}" colspan="4" style="text-align:center;color:#aaa">—</td>`;
+    if (!t) return `<td class="${bg}" colspan="4" style="text-align:center;color:#aaa">-</td>`;
     let countStr = '';
     if (t.title_count) countStr = ` <span style="color:#888;font-size:0.85em;font-weight:400">(${t.title_count} ${champEmoji})</span>`;
     else if (t.runner_up_count) countStr = ` <span style="color:#888;font-size:0.85em;font-weight:400">(${t.runner_up_count} 🥈)</span>`;
@@ -944,9 +944,9 @@ function renderLeagueHistory(league) {
         <td class="${bg} col-hide-mobile" style="color:#bbb;text-align:center">-</td>
         <td class="${bg} rating-cell" style="color:#bbb">-</td>`;
     }
-    const rating   = t.rating    != null ? t.rating.toFixed(2) : '—';
-    const ovrRank  = t.rank      != null ? `${t.rank}`         : '—';
-    const confRank = t.conf_rank != null ? `${t.conf_rank}`    : '—';
+    const rating   = t.rating    != null ? t.rating.toFixed(2) : '-';
+    const ovrRank  = t.rank      != null ? `${t.rank}`         : '-';
+    const confRank = t.conf_rank != null ? `${t.conf_rank}`    : '-';
     const slug = nameToSlug[t.team];
     const teamTd = slug
       ? `<td class="${bg} team-cell linked" data-team-slug="${slug}" data-season="${season}" style="white-space:nowrap">${cellInner}</td>`

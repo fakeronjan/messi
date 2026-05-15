@@ -602,7 +602,7 @@ for tournament in sorted(podiums['tournament'].unique()):
 # never accumulate further counts since they don't appear in post-data entries.
 PRE_DATA_TOURNAMENT_COUNTS = {
     'FIFA World Cup': {
-        # Note: keys use "Germany" not "West Germany" — the rating data layer
+        # Note: keys use "Germany" not "West Germany" - the rating data layer
         # canonicalizes all eras to "Germany", so the seed must match for
         # post-1982 Germany entries to inherit the pre-1982 (West Germany) tally.
         'champion': {  # 1930-1978
@@ -649,7 +649,7 @@ PRE_DATA_TOURNAMENT_COUNTS = {
 }
 
 
-# Pre-rated tournament rows — displayed on the tournament tab for editions
+# Pre-rated tournament rows - displayed on the tournament tab for editions
 # that pre-date our rated dataset. Each entry surfaces year + host + podium
 # but has no rating/rank (data anchor is 1980). Title counts are computed
 # below from running tallies within the pre-rated set so they line up with
@@ -670,6 +670,26 @@ PRE_RATED_PODIUMS = {
         {'season': 1978, 'champion': 'Argentina', 'runner_up': 'Netherlands',    'third': 'Brazil'},
     ],
 }
+
+
+# Some tournaments in tournament_podiums.csv pre-date the rating data
+# itself: games go back to 1980 but ratings only publish from 1986 onward
+# (rolling window needs to fill first). For those editions, country_tournament_info()
+# returns rating=None, rank=None, etc. Mark them pre_rated so the UI gives
+# them the same gray-dash treatment as the hardcoded 1930-1978 rows, and
+# strip the now-meaningless rating/rank/conf_rank fields from team blocks.
+_first_rated_year = int(min(d.year for d in df['date'] if d is not None))
+for tournament, entries in champions.items():
+    for entry in entries:
+        if entry['season'] >= _first_rated_year:
+            continue
+        entry['pre_rated'] = True
+        for slot in ('champion', 'runner_up', 'third'):
+            tb = entry.get(slot)
+            if not tb:
+                continue
+            for k in ('rating', 'rank', 'conf_rank', 'confederation'):
+                tb.pop(k, None)
 
 
 # Running counts per tournament (champion / runner-up / third), seeded with pre-data totals
@@ -697,7 +717,7 @@ for tournament, entries in champions.items():
 # appear after the rated entries in the newest-first list, so they render at
 # the bottom of the tournament tab. Cumulative title_counts are tallied
 # within the pre-rated set so they end at the same totals as the seed dict
-# above — the first rated entry then continues the count seamlessly.
+# above - the first rated entry then continues the count seamlessly.
 def _pre_rated_block(team_name, count_key, count):
     # Mirror DILLON: omit rating/rank/conf_rank keys entirely so the UI's
     # pre-rated branch renders explicit gray dashes instead of via the
