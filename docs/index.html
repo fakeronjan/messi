@@ -958,8 +958,16 @@ function renderLeagueHistory(league) {
     const hostStr = e.host_flags
       ? ` <span style="font-size:0.85em">${e.host_flags}</span>`
       : '';
-    return `<tr>
-    <td class="season-cell linked" data-season-link="${e.season}" data-target-conf="${targetConf}" style="white-space:nowrap">${e.season}${hostStr}</td>
+    // Pre-rated rows (editions before our data anchor) have no rating/rank
+    // and no underlying Standings page to jump to — render the year as plain
+    // text and dim the row slightly so it reads as reference data.
+    const preRated = !!(e.champion && e.champion.pre_rated);
+    const yearTd = preRated
+      ? `<td class="season-cell" style="white-space:nowrap;color:#888">${e.season}${hostStr}</td>`
+      : `<td class="season-cell linked" data-season-link="${e.season}" data-target-conf="${targetConf}" style="white-space:nowrap">${e.season}${hostStr}</td>`;
+    const rowStyle = preRated ? ' style="opacity:0.75"' : '';
+    return `<tr${rowStyle}>
+    ${yearTd}
     ${teamCell(e.champion,  'col-champ', e.season)}
     ${teamCell(e.runner_up, 'col-ru', e.season)}
     ${teamCell(e.third,     'col-ru', e.season)}

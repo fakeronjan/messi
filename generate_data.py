@@ -152,6 +152,17 @@ _TOURNAMENT_ABBREV = {
 # Host country flags per tournament edition. Co-hosted = list of flags.
 # Empty list for editions without a single clear host (e.g. UEFA Euro 2020 pan-European).
 _TOURNAMENT_HOSTS = {
+    ('FIFA World Cup', 1930): ['Uruguay'],
+    ('FIFA World Cup', 1934): ['Italy'],
+    ('FIFA World Cup', 1938): ['France'],
+    ('FIFA World Cup', 1950): ['Brazil'],
+    ('FIFA World Cup', 1954): ['Switzerland'],
+    ('FIFA World Cup', 1958): ['Sweden'],
+    ('FIFA World Cup', 1962): ['Chile'],
+    ('FIFA World Cup', 1966): ['England'],
+    ('FIFA World Cup', 1970): ['Mexico'],
+    ('FIFA World Cup', 1974): ['Germany'],   # West Germany at the time
+    ('FIFA World Cup', 1978): ['Argentina'],
     ('FIFA World Cup', 1982): ['Spain'],
     ('FIFA World Cup', 1986): ['Mexico'],
     ('FIFA World Cup', 1990): ['Italy'],
@@ -591,18 +602,21 @@ for tournament in sorted(podiums['tournament'].unique()):
 # never accumulate further counts since they don't appear in post-data entries.
 PRE_DATA_TOURNAMENT_COUNTS = {
     'FIFA World Cup': {
+        # Note: keys use "Germany" not "West Germany" — the rating data layer
+        # canonicalizes all eras to "Germany", so the seed must match for
+        # post-1982 Germany entries to inherit the pre-1982 (West Germany) tally.
         'champion': {  # 1930-1978
-            'Brazil': 3, 'Italy': 2, 'West Germany': 2, 'Uruguay': 2,
+            'Brazil': 3, 'Italy': 2, 'Germany': 2, 'Uruguay': 2,
             'Argentina': 1, 'England': 1,
         },
         'runner_up': {
             'Hungary': 2, 'Czechoslovakia': 2, 'Netherlands': 2,
-            'Argentina': 1, 'Brazil': 1, 'Sweden': 1, 'West Germany': 1, 'Italy': 1,
+            'Argentina': 1, 'Brazil': 1, 'Sweden': 1, 'Germany': 1, 'Italy': 1,
         },
         'third': {
-            'Brazil': 2,
+            'Brazil': 2, 'Germany': 2,  # Germany 1934 + 1970
             'United States': 1, 'Sweden': 1, 'Austria': 1, 'France': 1,
-            'Chile': 1, 'Portugal': 1, 'West Germany': 1, 'Poland': 1,
+            'Chile': 1, 'Portugal': 1, 'Poland': 1,
         },
     },
     'UEFA Euro': {
@@ -635,6 +649,29 @@ PRE_DATA_TOURNAMENT_COUNTS = {
 }
 
 
+# Pre-rated tournament rows — displayed on the tournament tab for editions
+# that pre-date our rated dataset. Each entry surfaces year + host + podium
+# but has no rating/rank (data anchor is 1980). Title counts are computed
+# below from running tallies within the pre-rated set so they line up with
+# PRE_DATA_TOURNAMENT_COUNTS automatically.
+PRE_RATED_PODIUMS = {
+    'FIFA World Cup': [
+        # oldest-first; will be inserted at the end of the newest-first entries list
+        {'season': 1930, 'champion': 'Uruguay',   'runner_up': 'Argentina',      'third': 'United States'},
+        {'season': 1934, 'champion': 'Italy',     'runner_up': 'Czechoslovakia', 'third': 'Germany'},
+        {'season': 1938, 'champion': 'Italy',     'runner_up': 'Hungary',        'third': 'Brazil'},
+        {'season': 1950, 'champion': 'Uruguay',   'runner_up': 'Brazil',         'third': 'Sweden'},
+        {'season': 1954, 'champion': 'Germany',   'runner_up': 'Hungary',        'third': 'Austria'},
+        {'season': 1958, 'champion': 'Brazil',    'runner_up': 'Sweden',         'third': 'France'},
+        {'season': 1962, 'champion': 'Brazil',    'runner_up': 'Czechoslovakia', 'third': 'Chile'},
+        {'season': 1966, 'champion': 'England',   'runner_up': 'Germany',        'third': 'Portugal'},
+        {'season': 1970, 'champion': 'Brazil',    'runner_up': 'Italy',          'third': 'Germany'},
+        {'season': 1974, 'champion': 'Germany',   'runner_up': 'Netherlands',    'third': 'Poland'},
+        {'season': 1978, 'champion': 'Argentina', 'runner_up': 'Netherlands',    'third': 'Brazil'},
+    ],
+}
+
+
 # Running counts per tournament (champion / runner-up / third), seeded with pre-data totals
 for tournament, entries in champions.items():
     seeds = PRE_DATA_TOURNAMENT_COUNTS.get(tournament, {})
@@ -654,6 +691,49 @@ for tournament, entries in champions.items():
             tt = entry['third']['team']
             third_counts[tt] = third_counts.get(tt, 0) + 1
             entry['third']['third_count'] = third_counts[tt]
+
+
+# Append pre-rated podium rows (oldest editions of each tournament). These
+# appear after the rated entries in the newest-first list, so they render at
+# the bottom of the tournament tab. Cumulative title_counts are tallied
+# within the pre-rated set so they end at the same totals as the seed dict
+# above — the first rated entry then continues the count seamlessly.
+def _pre_rated_block(team_name, count_key, count):
+    return {
+        'team':          team_name,
+        'flag':          country_flag(team_name),
+        'confederation': '',
+        'rating':        None,
+        'rank':          None,
+        'conf_rank':     None,
+        count_key:       count,
+        'pre_rated':     True,
+    }
+
+for tournament, pre_rows in PRE_RATED_PODIUMS.items():
+    if tournament not in champions:
+        champions[tournament] = []
+    champ_counts = {}
+    ru_counts    = {}
+    third_counts = {}
+    pre_entries_newest_first = []
+    for row in pre_rows:  # oldest-first
+        ct = row['champion']
+        rt = row['runner_up']
+        tt = row['third']
+        champ_counts[ct] = champ_counts.get(ct, 0) + 1
+        ru_counts[rt]    = ru_counts.get(rt, 0) + 1
+        third_counts[tt] = third_counts.get(tt, 0) + 1
+        pre_entries_newest_first.append({
+            'season':     row['season'],
+            'host_flags': host_flags(tournament, row['season']),
+            'champion':   _pre_rated_block(ct, 'title_count',      champ_counts[ct]),
+            'runner_up':  _pre_rated_block(rt, 'runner_up_count',  ru_counts[rt]),
+            'third':      _pre_rated_block(tt, 'third_count',      third_counts[tt]),
+        })
+    # Reverse to newest-first to match the rest of the entries list
+    champions[tournament].extend(reversed(pre_entries_newest_first))
+
 
 with open('docs/data/champions.json', 'w') as f:
     json.dump(champions, f, separators=(',', ':'))
