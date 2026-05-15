@@ -925,11 +925,8 @@ function renderLeagueHistory(league) {
   // 👑 reserved for FIFA World Cup champion counts; other tournaments use 🏆
   const champEmoji = league === 'FIFA World Cup' ? '👑' : '🏆';
 
-  function teamCell(t, bg, season) {
+  function teamCell(t, bg, season, preRated) {
     if (!t) return `<td class="${bg}" colspan="4" style="text-align:center;color:#aaa">—</td>`;
-    const rating   = t.rating    != null ? t.rating.toFixed(2) : '—';
-    const ovrRank  = t.rank      != null ? `${t.rank}`         : '—';
-    const confRank = t.conf_rank != null ? `${t.conf_rank}`    : '—';
     let countStr = '';
     if (t.title_count) countStr = ` <span style="color:#888;font-size:0.85em;font-weight:400">(${t.title_count} ${champEmoji})</span>`;
     else if (t.runner_up_count) countStr = ` <span style="color:#888;font-size:0.85em;font-weight:400">(${t.runner_up_count} 🥈)</span>`;
@@ -937,8 +934,20 @@ function renderLeagueHistory(league) {
     const disputedTag = t.disputed
       ? ` <span title="${t.disputed.replace(/"/g, '&quot;')}" style="background:#fde0e0;color:#c62828;border:1px solid #f5b3b3;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:4px;letter-spacing:0.5px;cursor:help">DISPUTED</span>`
       : '';
-    const slug = nameToSlug[t.team];
     const cellInner = `<span style="margin-right:4px">${t.flag || ''}</span>${t.team}${countStr}${disputedTag}`;
+    if (preRated) {
+      // Mirror DILLON: pre-rated team cells are not linked, and rating/rank
+      // columns render as explicit gray dashes (not via the null-fallback).
+      return `
+        <td class="${bg} team-cell" style="white-space:nowrap">${cellInner}</td>
+        <td class="${bg} col-hide-mobile" style="color:#bbb;text-align:center">-</td>
+        <td class="${bg} col-hide-mobile" style="color:#bbb;text-align:center">-</td>
+        <td class="${bg} rating-cell" style="color:#bbb">-</td>`;
+    }
+    const rating   = t.rating    != null ? t.rating.toFixed(2) : '—';
+    const ovrRank  = t.rank      != null ? `${t.rank}`         : '—';
+    const confRank = t.conf_rank != null ? `${t.conf_rank}`    : '—';
+    const slug = nameToSlug[t.team];
     const teamTd = slug
       ? `<td class="${bg} team-cell linked" data-team-slug="${slug}" data-season="${season}" style="white-space:nowrap">${cellInner}</td>`
       : `<td class="${bg} team-cell" style="white-space:nowrap">${cellInner}</td>`;
@@ -954,25 +963,29 @@ function renderLeagueHistory(league) {
   // to nothing (multi-confederation) — leave Standings pill as-is.
   const targetConf = tournamentConf(league);
 
+  let anyPreRated = false;
   const rows = entries.map(e => {
+    const preRated = !!e.pre_rated;
+    if (preRated) anyPreRated = true;
     const hostStr = e.host_flags
       ? ` <span style="font-size:0.85em">${e.host_flags}</span>`
       : '';
-    // Pre-rated rows (editions before our data anchor) have no rating/rank
-    // and no underlying Standings page to jump to — render the year as plain
-    // text and dim the row slightly so it reads as reference data.
-    const preRated = !!(e.champion && e.champion.pre_rated);
+    const sbSuffix = preRated ? ' <sup style="color:#888">†</sup>' : '';
     const yearTd = preRated
-      ? `<td class="season-cell" style="white-space:nowrap;color:#888">${e.season}${hostStr}</td>`
+      ? `<td class="season-cell" style="white-space:nowrap">${e.season}${hostStr}${sbSuffix}</td>`
       : `<td class="season-cell linked" data-season-link="${e.season}" data-target-conf="${targetConf}" style="white-space:nowrap">${e.season}${hostStr}</td>`;
-    const rowStyle = preRated ? ' style="opacity:0.75"' : '';
+    const rowStyle = preRated ? ' style="background:#fafafa"' : '';
     return `<tr${rowStyle}>
     ${yearTd}
-    ${teamCell(e.champion,  'col-champ', e.season)}
-    ${teamCell(e.runner_up, 'col-ru', e.season)}
-    ${teamCell(e.third,     'col-ru', e.season)}
+    ${teamCell(e.champion,  'col-champ', e.season, preRated)}
+    ${teamCell(e.runner_up, 'col-ru', e.season, preRated)}
+    ${teamCell(e.third,     'col-ru', e.season, preRated)}
   </tr>`;
   }).join('');
+
+  const footnote = anyPreRated
+    ? '<p style="font-size:11px;color:#888;margin-top:8px"><sup>†</sup> Pre-1980 editions. Results shown for completeness; teams from these tournaments are not modeled in ratings (MESSI anchors at 1980).</p>'
+    : '';
 
   document.getElementById('history-table-wrap').innerHTML = `
     <table>
@@ -992,7 +1005,8 @@ function renderLeagueHistory(league) {
         <th class="col-ru">Rating</th>
       </tr></thead>
       <tbody>${rows}</tbody>
-    </table>`;
+    </table>
+    ${footnote}`;
   attachLinks();
 }
 

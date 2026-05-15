@@ -699,15 +699,13 @@ for tournament, entries in champions.items():
 # within the pre-rated set so they end at the same totals as the seed dict
 # above — the first rated entry then continues the count seamlessly.
 def _pre_rated_block(team_name, count_key, count):
+    # Mirror DILLON: omit rating/rank/conf_rank keys entirely so the UI's
+    # pre-rated branch renders explicit gray dashes instead of via the
+    # generic null-fallback (which is a slightly different shade).
     return {
-        'team':          team_name,
-        'flag':          country_flag(team_name),
-        'confederation': '',
-        'rating':        None,
-        'rank':          None,
-        'conf_rank':     None,
-        count_key:       count,
-        'pre_rated':     True,
+        'team':    team_name,
+        'flag':    country_flag(team_name),
+        count_key: count,
     }
 
 for tournament, pre_rows in PRE_RATED_PODIUMS.items():
@@ -727,6 +725,7 @@ for tournament, pre_rows in PRE_RATED_PODIUMS.items():
         pre_entries_newest_first.append({
             'season':     row['season'],
             'host_flags': host_flags(tournament, row['season']),
+            'pre_rated':  True,   # entry-level flag, matches DILLON's PRE_RATED_SB_ROWS shape
             'champion':   _pre_rated_block(ct, 'title_count',      champ_counts[ct]),
             'runner_up':  _pre_rated_block(rt, 'runner_up_count',  ru_counts[rt]),
             'third':      _pre_rated_block(tt, 'third_count',      third_counts[tt]),
