@@ -345,16 +345,18 @@ _eligible_rows = (
 
 # For each eligible row, pull the team's rating at THAT tournament's final
 # date. Skip if games_played < GOAT_MIN_GAMES at the snapshot.
-df_indexed = df.set_index(['country', 'date'])
+# Build the lookup index using string dates to avoid pandas-version-dependent
+# type-handling differences (pandas 2.x normalizes datetime.date in index to
+# Timestamps, which then fails .loc on a date-key lookup).
+_df_with_str_date = df.copy()
+_df_with_str_date['_date_str'] = _df_with_str_date['date'].astype(str)
+df_indexed = _df_with_str_date.set_index(['country', '_date_str'])
 candidate_records = []
 for _, row in _eligible_rows.iterrows():
     final_date = _tournament_final_date_map.get((row['tournament'], int(row['year'])))
     if final_date is None:
         continue
-    # df dates are pd.Timestamp.date() objects already (set at file load).
-    # _tournament_final_date_map values come from games['date'] which can be
-    # either pd.Timestamp or datetime.date depending on dtype — normalize.
-    final_date_key = final_date.date() if hasattr(final_date, 'date') else final_date
+    final_date_key = str(final_date.date() if hasattr(final_date, 'date') else final_date)
     try:
         snap = df_indexed.loc[(row['team'], final_date_key)]
     except KeyError:
@@ -376,13 +378,26 @@ for _, row in _eligible_rows.iterrows():
         'date':          final_date,
     })
 
-eos_top = (
-    pd.DataFrame(candidate_records)
-    .sort_values('rating', ascending=False)
-    .drop_duplicates(subset=['country', 'year'], keep='first')  # keep highest if multi-tournament year
-    .head(50)
-    .reset_index(drop=True)
-)
+print(f"  GOAT candidate_records: {len(candidate_records)} (from {len(_eligible_rows)} eligible podium rows)")
+if not candidate_records:
+    # Defensive: empty candidates would crash sort_values. Emit empty goat_teams.json
+    # and a diagnostic so we can investigate the underlying lookup failure.
+    print("  WARNING: candidate_records is empty. Writing empty goat_teams.json.")
+    print(f"  Diagnostic: df shape={df.shape}, df.columns={list(df.columns)}")
+    print(f"  Sample df['date'] dtypes: {df['date'].head(3).tolist()}")
+    print(f"  Sample _tournament_final_date_map values: {list(_tournament_final_date_map.values())[:3]}")
+    with open('docs/data/goat_teams.json', 'w') as f:
+        json.dump([], f)
+    eos_top = pd.DataFrame(columns=['country', 'year', 'tournament', 'rating', 'rank',
+                                     'confederation', 'games_played', 'date'])
+else:
+    eos_top = (
+        pd.DataFrame(candidate_records)
+        .sort_values('rating', ascending=False)
+        .drop_duplicates(subset=['country', 'year'], keep='first')  # keep highest if multi-tournament year
+        .head(50)
+        .reset_index(drop=True)
+    )
 
 goat_data = []
 for i, (_, r) in enumerate(eos_top.iterrows()):
