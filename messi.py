@@ -15,7 +15,13 @@ warnings.filterwarnings('ignore')
 # ============================================================
 
 start_date         = '1980-01-01'   # first date to include in dataset
-window_game_days   = 200            # rolling game-day window
+window_game_days   = 200            # rolling game-day window (~10 months in 90s era,
+                                    # ~22 months in modern era). Tested 400 on 2026-05-23
+                                    # to dampen the France 2000 whipsaw, but it over-
+                                    # propped Brazil (12/50 GOAT) and WC champions often
+                                    # weren't #1 at WC-end. Reverted: 200d's reactivity
+                                    # (rank-swings on single-game losses) is accepted
+                                    # behavior rather than a bug.
 margin_cap         = 4              # max goal margin (matches ZIDANE / COBI soccer family)
 shootout_margin    = 0.5            # margin assigned to a shootout win
 home_field_adv     = 0.5            # per-game HCA on raw goal margin
