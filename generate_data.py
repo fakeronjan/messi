@@ -461,6 +461,36 @@ with open('docs/data/teams_index.json', 'w') as f:
     json.dump(teams_index, f, separators=(',', ':'))
 
 # ── 4. Season standings files (one per year) ──────────────────────────────────
+# Tournament-end labels: map a date to (label, prestige) for major tournaments.
+# Prestige (lower = more prestigious) controls dropdown default + ordering.
+# Edition detection uses gap-based segmentation (>= 90-day gap = new edition)
+# so editions straddling calendar years (e.g., ACoN winter schedule) are
+# correctly labeled at their actual final date, not at a calendar-year boundary.
+print("Building tournament-end-date map...")
+_TOURNAMENT_LABELS = {
+    'FIFA World Cup':            ('World Cup Final',      1),
+    'UEFA Euro':                 ('Euro Final',           2),
+    'Copa América':              ('Copa América Final',   3),
+    'AFC Asian Cup':             ('Asian Cup Final',      4),
+    'African Cup of Nations':    ('African Cup Final',    5),
+    'Gold Cup':                  ('Gold Cup Final',       6),
+}
+_games_full = pd.read_csv('all_soccer_games.csv', parse_dates=['date'])
+_games_full = _games_full.dropna(subset=['home_score', 'away_score']).copy()
+date_label_map = {}  # date_str -> (label_str, prestige)
+for _tname, (_lbl, _prestige) in _TOURNAMENT_LABELS.items():
+    _sub = _games_full[_games_full['tournament'] == _tname].sort_values('date')
+    if _sub.empty:
+        continue
+    # An edition ends at a game with no further games within 90 days.
+    _next_date = _sub['date'].shift(-1)
+    _is_final = _next_date.isna() | ((_next_date - _sub['date']).dt.days > 90)
+    for _d in _sub.loc[_is_final, 'date'].dt.date:
+        _date_str = str(_d)
+        if _date_str not in date_label_map or date_label_map[_date_str][1] > _prestige:
+            date_label_map[_date_str] = (_lbl, _prestige)
+print(f"  Found {len(date_label_map)} tournament-end snapshot dates")
+
 print("Writing season standings files...")
 all_seasons = sorted(df['year'].dropna().unique())
 
@@ -471,11 +501,10 @@ for season in all_seasons:
     for ranking_id, rdf in sdf.groupby('ranking_id'):
         rdf = rdf.sort_values('rank')
         snap_date = str(rdf['date'].iloc[0])
-        # Label: World Cup final day, end of even-year, or just date
-        is_wc_final = int(rdf['is_world_cup_final_day'].iloc[0]) if 'is_world_cup_final_day' in rdf.columns else 0
         label = None
-        if is_wc_final:
-            label = 'World Cup Final Day'
+        prestige = None
+        if snap_date in date_label_map:
+            label, prestige = date_label_map[snap_date]
         teams_snap = [
             {
                 'rank':                int(r['rank']) if not pd.isna(r['rank']) else None,
@@ -490,7 +519,7 @@ for season in all_seasons:
             }
             for _, r in rdf.iterrows()
         ]
-        snapshots.append({'date': snap_date, 'label': label, 'teams': teams_snap})
+        snapshots.append({'date': snap_date, 'label': label, 'prestige': prestige, 'teams': teams_snap})
 
     snapshots.sort(key=lambda x: x['date'])
     with open(f'docs/data/seasons/{season}.json', 'w') as f:

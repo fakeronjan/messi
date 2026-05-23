@@ -19,7 +19,11 @@ window_game_days   = 200            # rolling game-day window
 margin_cap         = 4              # max goal margin (matches ZIDANE / COBI soccer family)
 shootout_margin    = 0.5            # margin assigned to a shootout win
 home_field_adv     = 0.5            # per-game HCA on raw goal margin
-min_games          = 5              # minimum games in window to appear in final output
+min_competitive_games = 5           # minimum NON-FRIENDLY games in window to appear in
+                                    # final output. Friendlies still contribute to the
+                                    # rating regression (cross-confederation signal) but
+                                    # don't count toward eligibility. Fixes the Israel-1998
+                                    # anomaly where 5 friendlies inflated a team to #1.
 friendly_weight    = 0.25           # WLS observation weight applied to friendlies
                                     # (competitive games default to 1.0; tournament
                                     # tier uplift is multiplied on top via TOURNAMENT_WEIGHTS)
@@ -574,8 +578,21 @@ for i in range(min_date_id, max_date_id + 1):
         away_gp.columns = ['name', 'gp_away']
         gp = pd.merge(home_gp, away_gp, on='name', how='outer').fillna(0)
         gp['games_played'] = (gp['gp_home'] + gp['gp_away']).astype(int)
-        ranked = pd.merge(ranked, gp[['name', 'games_played']], on='name', how='left')
+
+        # Competitive (non-friendly) game counts feed the eligibility filter.
+        comp_df = working_df[working_df['match_type'] == 'competitive']
+        comp_home = comp_df.groupby('home_team').size().reset_index(name='cgp_home')
+        comp_away = comp_df.groupby('away_team').size().reset_index(name='cgp_away')
+        comp_home.columns = ['name', 'cgp_home']
+        comp_away.columns = ['name', 'cgp_away']
+        cgp = pd.merge(comp_home, comp_away, on='name', how='outer').fillna(0)
+        cgp['competitive_games_played'] = (cgp['cgp_home'] + cgp['cgp_away']).astype(int)
+        gp = pd.merge(gp, cgp[['name', 'competitive_games_played']], on='name', how='left')
+        gp['competitive_games_played'] = gp['competitive_games_played'].fillna(0).astype(int)
+
+        ranked = pd.merge(ranked, gp[['name', 'games_played', 'competitive_games_played']], on='name', how='left')
         ranked['games_played'] = ranked['games_played'].fillna(0).astype(int)
+        ranked['competitive_games_played'] = ranked['competitive_games_played'].fillna(0).astype(int)
 
         messi_df = pd.concat([messi_df, ranked], axis=0, sort=False).reset_index(drop=True)
 
@@ -790,7 +807,7 @@ final_df = final_df[[
     'ranking_id', 'date', 'year', 'country',
     'confederation',
     'rating', 'rank',
-    'games_played',
+    'games_played', 'competitive_games_played',
     'last_match_date', 'last_match', 'is_game_day',
     'most_recent', 'is_world_cup_final_day',
     'tournament_finish'
@@ -802,10 +819,12 @@ final_df.drop_duplicates(keep='first', inplace=True)
 # 1986+ cutoff (data quality cliff before — Maradona-era WC anchor)
 final_df = final_df[final_df['date'] >= pd.to_datetime('1986-01-01').date()]
 
-# min_games filter — drops stale ratings from inactive/banned teams whose
-# old games are still in the calendar window
-final_df = final_df[final_df['games_played'] >= min_games]
-print(f"After min_games={min_games} filter: {len(final_df)} rows")
+# Eligibility filter: require min_competitive_games NON-FRIENDLY games in window.
+# Friendlies still contribute to the regression (cross-confederation signal)
+# but don't count toward eligibility. This fixes the Israel-1998 hot-streak
+# anomaly where 5 friendlies inflated a team to #1.
+final_df = final_df[final_df['competitive_games_played'] >= min_competitive_games]
+print(f"After min_competitive_games={min_competitive_games} filter: {len(final_df)} rows")
 
 final_df.to_csv('messi_ratings_final.csv', index=False)
 print("messi_ratings_final.csv saved!")

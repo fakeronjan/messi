@@ -680,13 +680,32 @@ async function loadSeason(season) {
     const snaps = currentSeasonData.snapshots;
     const dateSel = document.getElementById('date-filter');
     dateSel.innerHTML = '';
+
+    // Tournament-end snapshots first (sorted by prestige), then a separator, then all dates.
+    const labeled = snaps.filter(s => s.label != null)
+      .sort((a, b) => (a.prestige ?? 99) - (b.prestige ?? 99));
+    labeled.forEach(snap => {
+      const opt = document.createElement('option');
+      opt.value = snap.date;
+      opt.textContent = `${snap.date} | ${snap.label}`;
+      dateSel.appendChild(opt);
+    });
+    if (labeled.length) {
+      const sep = document.createElement('option');
+      sep.disabled = true;
+      sep.textContent = '──────────';
+      dateSel.appendChild(sep);
+    }
     [...snaps].reverse().forEach(snap => {
       const opt = document.createElement('option');
       opt.value = snap.date;
-      opt.textContent = snap.label ? `${snap.date} | ${snap.label}` : snap.date;
+      opt.textContent = snap.date;
       dateSel.appendChild(opt);
     });
-    selectSnapshot(snaps[snaps.length - 1].date);
+
+    // Default: highest-prestige tournament end if any; otherwise most recent snapshot.
+    const defaultDate = labeled.length ? labeled[0].date : snaps[snaps.length - 1].date;
+    selectSnapshot(defaultDate);
   } catch(e) {
     document.getElementById('standings-table-wrap').innerHTML =
       `<p class="error">Could not load season data.</p>`;
