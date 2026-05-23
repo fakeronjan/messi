@@ -472,17 +472,17 @@ df['home_venue'] = np.where(df['neutral'] == True, ' vs. (N) ', ' vs. ')
 df['away_venue'] = np.where(df['neutral'] == True, ' vs. (N) ', ' @ ')
 
 df['home_last_match'] = (
-    df['home_result_flag'] +
-    df['home_venue'] +
-    df['away_team'] + ' ' +
+    df['home_result_flag'] + ' ' +
     df['home_score_int'].map(str) + '-' + df['away_score_int'].map(str) +
+    df['home_venue'] +
+    df['away_team'] +
     ' (' + df['tournament'] + ')'
 )
 df['away_last_match'] = (
-    df['away_result_flag'] +
-    df['away_venue'] +
-    df['home_team'] + ' ' +
+    df['away_result_flag'] + ' ' +
     df['away_score_int'].map(str) + '-' + df['home_score_int'].map(str) +
+    df['away_venue'] +
+    df['home_team'] +
     ' (' + df['tournament'] + ')'
 )
 
