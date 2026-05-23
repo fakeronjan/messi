@@ -703,8 +703,12 @@ async function loadSeason(season) {
       dateSel.appendChild(opt);
     });
 
-    // Default: highest-prestige tournament end if any; otherwise most recent snapshot.
-    const defaultDate = labeled.length ? labeled[0].date : snaps[snaps.length - 1].date;
+    // Default: highest-prestige tournament end for complete years; latest snapshot
+    // for the current calendar year (in-progress).
+    const isCurrentYear = currentSeasonData.season === new Date().getFullYear();
+    const defaultDate = (!isCurrentYear && labeled.length)
+      ? labeled[0].date
+      : snaps[snaps.length - 1].date;
     selectSnapshot(defaultDate);
   } catch(e) {
     document.getElementById('standings-table-wrap').innerHTML =
