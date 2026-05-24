@@ -276,6 +276,85 @@ _tournament_final_dates = set(_tournament_final_date_map.values())
 df['is_end_of_season'] = df['date'].apply(lambda d: 1 if d in _tournament_final_dates else 0)
 print(f"Tournament-end snapshot dates: {len(_tournament_final_dates)}")
 
+# Per-(team, year) anchor for the Team Summary cross-season view: pick ONE
+# representative snapshot per team-year. Priority:
+#   1. FIFA World Cup Final day (if that year had one)
+#   2. Team's confederation continental championship final day
+#   3. Other major tournament the team participated in (latest final date)
+#   4. Fallback: last game-day of the year for that team
+# Output: `_team_year_anchor_date[(team, year)] -> (Timestamp, label)`.
+_CONFED_CHAMPIONSHIP = {
+    'UEFA':       'UEFA Euro',
+    'CONMEBOL':   'Copa América',
+    'AFC':        'AFC Asian Cup',
+    'CAF':        'African Cup of Nations',
+    'CONCACAF':   'Gold Cup',
+    'OFC':        'Oceania Nations Cup',
+}
+_OTHER_TOURNAMENTS = [  # tried after WC + continental, in this priority order
+    'UEFA Nations League', 'CONCACAF Nations League', 'FIFA Confederations Cup',
+]
+# (team, year) -> set of tournaments participated in
+_team_year_tournaments = {}
+for _t in PODIUM_TOURNAMENTS:
+    _tg = games[games['tournament'] == _t]
+    for _, _g in _tg.iterrows():
+        _yr = _g['date'].year
+        for _team in (_g['home_team'], _g['away_team']):
+            _team_year_tournaments.setdefault((_team, _yr), set()).add(_t)
+
+# (team, year) -> team confederation (latest known)
+_team_confed = (
+    df.dropna(subset=['confederation'])
+      .groupby('country')['confederation'].last().to_dict()
+)
+# (team, year) -> last actual game-day Timestamp (fallback for years with no major tournament)
+_team_year_last_game = (
+    df[df['is_game_day'] == 1]
+      .dropna(subset=['year'])
+      .groupby(['country', 'year'])['date'].max().to_dict()
+)
+
+_team_year_anchor = {}  # (team, year_int) -> (Timestamp, label)
+for (team, year_f), last_game in _team_year_last_game.items():
+    year = int(year_f)
+    played = _team_year_tournaments.get((team, year), set())
+    chosen = None  # (Timestamp, label)
+    # 1. World Cup
+    if 'FIFA World Cup' in played:
+        d = _tournament_final_date_map.get(('FIFA World Cup', year))
+        if d is not None: chosen = (d, 'End of FIFA World Cup')
+    # 2. Confederation championship
+    if chosen is None:
+        confed = _team_confed.get(team)
+        confed_t = _CONFED_CHAMPIONSHIP.get(confed)
+        if confed_t and confed_t in played:
+            d = _tournament_final_date_map.get((confed_t, year))
+            if d is not None: chosen = (d, f'End of {confed_t}')
+    # 3. Other major tournament
+    if chosen is None:
+        for _t in _OTHER_TOURNAMENTS:
+            if _t in played:
+                d = _tournament_final_date_map.get((_t, year))
+                if d is not None:
+                    chosen = (d, f'End of {_t}')
+                    break
+    # 4. Fallback: last game-day of the year
+    if chosen is None:
+        chosen = (last_game, 'End of year')
+    _team_year_anchor[(team, year)] = chosen
+
+# Per-row flag + label string for the year-anchor row of each team-year
+df['is_year_anchor'] = 0
+df['year_anchor_label'] = ''
+_anchor_rows_idx = []
+for (team, year), (d, label) in _team_year_anchor.items():
+    mask = (df['country'] == team) & (df['date'] == d) & (df['year'] == year)
+    if mask.any():
+        df.loc[mask, 'is_year_anchor'] = 1
+        df.loc[mask, 'year_anchor_label'] = label
+print(f"Year-anchor flagged rows: {(df['is_year_anchor']==1).sum():,} (one per team-year where data exists)")
+
 # Confederation rank within each ranking_id snapshot
 df['conf_rank'] = df.groupby(['ranking_id', 'confederation'])['rating'] \
                     .rank(method='min', ascending=False)
@@ -417,7 +496,7 @@ with open('docs/data/goat_teams.json', 'w') as f:
 # ── 3. Per-team JSON files ───────────────────────────────────────────────────
 print("Writing per-team JSON files...")
 # Per team: keep only game days + EOS markers (avoids gigantic files)
-team_data = df[(df['is_game_day'] == 1) | (df['is_end_of_season'] == 1)].copy()
+team_data = df[(df['is_game_day'] == 1) | (df['is_end_of_season'] == 1) | (df['is_year_anchor'] == 1)].copy()
 team_data = team_data.sort_values(['country', 'date'])
 
 # (team, year) set of nations that actually played ≥1 game that year. Used to
@@ -461,6 +540,8 @@ for team in all_teams:
                 'last_match':          clean(r['last_match']),
                 'is_end_of_season':    int(r['is_end_of_season']),
                 'is_game_day':         int(r['is_game_day']),
+                'is_year_anchor':      int(r.get('is_year_anchor', 0) or 0),
+                'year_anchor_label':   clean(r.get('year_anchor_label', '')),
                 'tournament_finishes': finishes_for_year,
                 'continental_winner':  1 if won_continental else 0,
             }
