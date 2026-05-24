@@ -34,7 +34,7 @@ jobs:
         run: |
           git config user.name  "MESSI Bot"
           git config user.email "messi-bot@users.noreply.github.com"
-          git add all_soccer_games.csv messi_ratings.csv.gz tournament_podiums.csv docs/data/
+          git add all_soccer_games.csv messi_ratings.csv.gz messi_ratings_final.csv.gz tournament_podiums.csv docs/data/
           if git diff --staged --quiet; then
             echo "No changes to commit."
           else

@@ -832,8 +832,8 @@ final_df = final_df[final_df['date'] >= pd.to_datetime('1986-01-01').date()]
 final_df = final_df[final_df['competitive_games_played'] >= min_competitive_games]
 print(f"After min_competitive_games={min_competitive_games} filter: {len(final_df)} rows")
 
-final_df.to_csv('messi_ratings_final.csv', index=False)
-print("messi_ratings_final.csv saved!")
+final_df.to_csv('messi_ratings_final.csv.gz', index=False, compression='gzip')
+print("messi_ratings_final.csv.gz saved!")
 print(f"\nTotal rows in final output: {len(final_df)}")
 print(f"\nMost recent ratings snapshot (top 20):")
 print(final_df[final_df['most_recent'] == 1].sort_values('rank')[

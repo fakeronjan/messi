@@ -1,5 +1,5 @@
 """
-generate_data.py — reads messi_ratings_final.csv and writes JSON for the MESSI web frontend.
+generate_data.py — reads messi_ratings_final.csv.gz and writes JSON for the MESSI web frontend.
 Run after messi.py. Outputs to docs/data/.
 
 Mirrors the ZIDANE site architecture (multiple competitions / leagues), adapted for
@@ -17,7 +17,7 @@ os.makedirs('docs/data/teams', exist_ok=True)
 os.makedirs('docs/data/seasons', exist_ok=True)
 
 print("Reading ratings...")
-df = pd.read_csv('messi_ratings_final.csv')
+df = pd.read_csv('messi_ratings_final.csv.gz')
 df['date'] = pd.to_datetime(df['date']).dt.date
 
 games = pd.read_csv('all_soccer_games.csv')
