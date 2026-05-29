@@ -4,6 +4,7 @@
 # Based on ZIDANE / COBI architecture (homebrew WLS solver)
 # ============================================================
 
+import os
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta, date
@@ -433,6 +434,29 @@ df = df[
 ].copy()
 print(f"After non-FIFA team drop: {len(df)} rows ({_n_before - len(df)} matches removed)")
 
+# Append-only DB guard: the results CSV is re-fetched in full from a remote
+# source every run and overwritten. If that fetch comes back short, games we
+# already have would be silently deleted — and because grouped_date_id below is
+# positional, the date set shifting would also desync the ratings cache. Treat
+# the committed file as the database: fresh rows win on conflict (so score/data
+# corrections land), but games already stored that this run's fetch missed are
+# preserved. History can only grow or be corrected, never silently shrink.
+if os.path.exists('all_soccer_games.csv'):
+    _prev = pd.read_csv('all_soccer_games.csv')
+    _prev['date'] = pd.to_datetime(_prev['date'], errors='coerce')
+    _prev = _prev.drop(columns=[c for c in ('grouped_date_id', 'unique_game_id') if c in _prev.columns])
+    _key = ['date', 'home_team', 'away_team']
+    _fresh = df.copy();  _fresh['_src_priority'] = 0
+    _prevp = _prev.copy(); _prevp['_src_priority'] = 1
+    _combined = pd.concat([_fresh, _prevp], ignore_index=True, sort=False)
+    _combined = _combined.sort_values('_src_priority').drop_duplicates(subset=_key, keep='first')
+    _fk = set(map(tuple, df[_key].astype(str).values))
+    _pres = sum(1 for k in map(tuple, _prev[_key].astype(str).values) if k not in _fk)
+    if _pres:
+        print(f"[db-union] preserved {_pres:,} games already in the database "
+              f"that this run's fetch did not return (flaky source — not deleting history)")
+    df = _combined.drop(columns=['_src_priority']).reset_index(drop=True)
+
 # ============================================================
 # STEP 7 - DATE IDs FOR ROLLING WINDOW
 # ============================================================
@@ -510,6 +534,34 @@ min_date_id = 1
 
 try:
     messi_df = pd.read_csv('messi_ratings.csv.gz')
+except FileNotFoundError:
+    messi_df = None
+    print("No existing ratings found - running full history from scratch.")
+
+# Cache-validity guard: ranking_id is positional (groupby('date').ngroup()+1),
+# so if the game-date set changes size (e.g. the re-fetched results set shifts),
+# cached ids desync from dates and the skip logic freezes ratings at an old
+# date. Verify the cached id->date mapping still matches current games; on any
+# mismatch, discard the cache and rebuild from scratch. (Same guard as COBI/
+# ZIDANE; the db-union above should keep the set stable, this is the backstop.)
+if messi_df is not None:
+    cur_id_date = (df.drop_duplicates('grouped_date_id')
+                     .set_index('grouped_date_id')['date']
+                     .dt.strftime('%Y-%m-%d').to_dict())
+    cache_id_date = (messi_df.drop_duplicates('ranking_id')
+                       .set_index('ranking_id')['ranking_date']
+                       .astype(str).str.slice(0, 10).to_dict())
+    mismatches = sum(1 for rid, d in cache_id_date.items() if cur_id_date.get(rid) != d)
+    if mismatches:
+        print(f"  cache desynced from current game dates "
+              f"({mismatches:,} ranking_id<->date mismatches) — full rebuild from scratch")
+        messi_df = None
+
+if messi_df is None:
+    messi_df = pd.DataFrame(columns=['ranking_id', 'ranking_date', 'season', 'name', 'rating', 'rank'])
+    max_id_ranked = -1
+    min_id_ranked = -1
+else:
     all_ids = sorted(messi_df['ranking_id'].unique())
     if len(all_ids) > RECOMPUTE_TAIL_DAYS:
         tail_threshold = all_ids[-RECOMPUTE_TAIL_DAYS]
@@ -521,11 +573,6 @@ try:
     min_id_ranked = int(messi_df['ranking_id'].min()) if not messi_df.empty else -1
     if max_id_ranked >= 0:
         print(f"Existing ratings found. Ranked IDs: {min_id_ranked} to {max_id_ranked}")
-except FileNotFoundError:
-    messi_df = pd.DataFrame(columns=['ranking_id', 'ranking_date', 'season', 'name', 'rating', 'rank'])
-    max_id_ranked = -1
-    min_id_ranked = -1
-    print("No existing ratings found - running full history from scratch.")
 
 last_printed_ym = None
 for i in range(min_date_id, max_date_id + 1):
