@@ -264,13 +264,22 @@ PODIUM_TOURNAMENTS = [
 # Per-tournament + per-year final date map. Used both for is_end_of_season
 # (set of all final dates) and the GOAT anchor logic (specific date per
 # (tournament, year)).
+# In-progress gate (see [[feedback-in-progress-season-gate]]): only assign a
+# "final date" to a tournament edition that has actually concluded. MESSI
+# games carry no `round` field, so the only completion signal here is a
+# curated podium entry. Without this gate, an in-progress event's most
+# recent played game-day gets labeled the "Final", which is wrong.
+_podium_editions = set(zip(podiums['tournament'], podiums['year'].astype(int)))
 _tournament_final_date_map = {}  # (tournament, year_int) -> final pd.Timestamp
 for _t in PODIUM_TOURNAMENTS:
     _tg = games[games['tournament'] == _t]
     if _tg.empty:
         continue
     for _year, _grp in _tg.groupby(_tg['date'].apply(lambda d: d.year)):
-        _tournament_final_date_map[(_t, int(_year))] = _grp['date'].max()
+        _year = int(_year)
+        if (_t, _year) not in _podium_editions:
+            continue  # in progress -- no Final label assigned
+        _tournament_final_date_map[(_t, _year)] = _grp['date'].max()
 _tournament_final_dates = set(_tournament_final_date_map.values())
 
 df['is_end_of_season'] = df['date'].apply(lambda d: 1 if d in _tournament_final_dates else 0)
