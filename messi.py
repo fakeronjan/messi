@@ -1,6 +1,6 @@
 # ============================================================
 # MESSI - International Soccer Power Rankings
-# Massey Elo Soccer Strength Index
+# fakeronjan WLS Elo Soccer Strength Index
 # Based on ZIDANE / COBI architecture (homebrew WLS solver)
 # ============================================================
 
@@ -253,9 +253,9 @@ CONFEDERATION_MAP = {
 }
 
 
-def _solve_massey(window_df):
+def _solve_wls(window_df):
     """
-    Homebrew weighted-least-squares Massey solver. Mirrors ZIDANE / COBI.
+    Homebrew weighted-least-squares fakeronjan WLS solver. Mirrors ZIDANE / COBI.
 
     Takes a window df with home_team, away_team, adj_margin_home (HCA + cap
     pre-applied margin from home perspective), and weight (recency × tier ×
@@ -617,7 +617,7 @@ for i in range(min_date_id, max_date_id + 1):
         last_printed_ym = current_ym
 
     try:
-        ranked = _solve_massey(working_df)
+        ranked = _solve_wls(working_df)
         if ranked['rating'].isna().any() or np.isinf(ranked['rating']).any():
             continue
 

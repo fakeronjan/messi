@@ -452,7 +452,7 @@ with open('docs/data/current_standings.json', 'w') as f:
 # in one year, we use the rating from whichever is highest.
 #
 # Also requires games_played >= 6 in the rolling window — filters teams
-# whose Massey rating comes from too small a sample of weak-confederation
+# whose fakeronjan WLS rating comes from too small a sample of weak-confederation
 # opponents (e.g. Tahiti 2012 OFC only had 5 OFC qualifier games).
 print("Writing goat_teams.json...")
 podiums = pd.read_csv('tournament_podiums.csv')
