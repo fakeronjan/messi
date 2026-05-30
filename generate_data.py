@@ -26,6 +26,42 @@ games['date'] = pd.to_datetime(games['date']).dt.date
 podiums = pd.read_csv('tournament_podiums.csv')
 
 
+# DILLON era-aware naming (user-locked 2026-05-29). MESSI works in name-space
+# (the engine rates by country name), so NAME_HISTORY is keyed by canonical
+# display name. Each entry: (historical_name, start_iso, end_iso). MESSI
+# already silently merges these renames at scrape time -- this just makes
+# the era visible inline via display_name on each per-row entry.
+NAME_HISTORY_BY_NAME = {
+    'Russia':    [('Soviet Union', '1900-01-01', '1991-12-25')],
+    'Germany':   [('West Germany',  '1900-01-01', '1990-10-03')],
+    'Myanmar':   [('Burma',         '1900-01-01', '1989-06-18')],
+    'DR Congo':  [('Zaire',         '1971-10-27', '1997-05-17')],
+    'Sri Lanka': [('Ceylon',        '1900-01-01', '1972-05-22')],
+    'Samoa':     [('Western Samoa', '1900-01-01', '1997-07-04')],
+}
+_NAME_HISTORY_PARSED = {
+    n: [(hn, pd.to_datetime(s).date(), pd.to_datetime(e).date())
+        for hn, s, e in entries]
+    for n, entries in NAME_HISTORY_BY_NAME.items()
+}
+HISTORICAL_NAMES_BY_NAME = {
+    n: [hn for hn, _, _ in entries] for n, entries in NAME_HISTORY_BY_NAME.items()
+}
+
+
+def display_name_at(country, as_of):
+    """Era-aware display name. Returns the historical name in effect on
+    `as_of` if NAME_HISTORY_BY_NAME covers it; else None."""
+    hist = _NAME_HISTORY_PARSED.get(country)
+    if not hist:
+        return None
+    d = as_of if hasattr(as_of, 'year') else pd.to_datetime(as_of).date()
+    for name, start, end in hist:
+        if start <= d <= end:
+            return name
+    return None
+
+
 def clean(val):
     if pd.isna(val):
         return ''
@@ -489,7 +525,7 @@ else:
 
 goat_data = []
 for i, (_, r) in enumerate(eos_top.iterrows()):
-    goat_data.append({
+    entry = {
         'rank':                i + 1,
         'team':                r['country'],
         'flag':                country_flag(r['country']),
@@ -498,7 +534,11 @@ for i, (_, r) in enumerate(eos_top.iterrows()):
         'rating':              round(float(r['rating']), 3),
         'tournament_finishes': country_year_finishes(r['country'], r['year']),
         'continental_winner':  1 if (r['country'], int(r['year'])) in _continental_winners else 0,
-    })
+    }
+    era = display_name_at(r['country'], r['date'])
+    if era and era != r['country']:
+        entry['display_name'] = era
+    goat_data.append(entry)
 with open('docs/data/goat_teams.json', 'w') as f:
     json.dump(goat_data, f, separators=(',', ':'))
 
@@ -530,7 +570,11 @@ for team in all_teams:
     team_slug = slug(team)
     confed = clean(tdf['confederation'].iloc[-1])
     flag = country_flag(team)
-    teams_index.append({'name': team, 'flag': flag, 'confederation': confed, 'slug': team_slug})
+    hist_names = HISTORICAL_NAMES_BY_NAME.get(team, [])
+    idx_entry = {'name': team, 'flag': flag, 'confederation': confed, 'slug': team_slug}
+    if hist_names:
+        idx_entry['historical_names'] = hist_names
+    teams_index.append(idx_entry)
 
     seasons = {}
     for season, sdf in tdf.groupby('year'):
@@ -540,8 +584,9 @@ for team in all_teams:
             continue  # skip ghost year — team played 0 games
         finishes_for_year = country_year_finishes(team, season)
         won_continental = (team, int(season)) in _continental_winners
-        seasons[int(season)] = [
-            {
+        rows = []
+        for _, r in sdf.sort_values('date').iterrows():
+            row = {
                 'date':                str(r['date']),
                 'rating':              round(float(r['rating']), 3) if not pd.isna(r['rating']) else None,
                 'rank':                int(r['rank']) if not pd.isna(r['rank']) else None,
@@ -554,12 +599,17 @@ for team in all_teams:
                 'tournament_finishes': finishes_for_year,
                 'continental_winner':  1 if won_continental else 0,
             }
-            for _, r in sdf.sort_values('date').iterrows()
-        ]
+            era = display_name_at(team, r['date'])
+            if era and era != team:
+                row['display_name'] = era
+            rows.append(row)
+        seasons[int(season)] = rows
 
+    team_doc = {'team': team, 'flag': flag, 'confederation': confed, 'seasons': seasons}
+    if hist_names:
+        team_doc['historical_names'] = hist_names
     with open(f'docs/data/teams/{team_slug}.json', 'w') as f:
-        json.dump({'team': team, 'flag': flag, 'confederation': confed, 'seasons': seasons},
-                  f, separators=(',', ':'))
+        json.dump(team_doc, f, separators=(',', ':'))
 
 teams_index.sort(key=lambda x: x['name'])
 with open('docs/data/teams_index.json', 'w') as f:
@@ -610,8 +660,9 @@ for season in all_seasons:
         prestige = None
         if snap_date in date_label_map:
             label, prestige = date_label_map[snap_date]
-        teams_snap = [
-            {
+        teams_snap = []
+        for _, r in rdf.iterrows():
+            row = {
                 'rank':                int(r['rank']) if not pd.isna(r['rank']) else None,
                 'team':                r['country'],
                 'flag':                country_flag(r['country']),
@@ -622,8 +673,10 @@ for season in all_seasons:
                 'tournament_finishes': country_year_finishes(r['country'], r['year']),
                 'continental_winner':  1 if (r['country'], int(r['year'])) in _continental_winners else 0,
             }
-            for _, r in rdf.iterrows()
-        ]
+            era = display_name_at(r['country'], r['date'])
+            if era and era != r['country']:
+                row['display_name'] = era
+            teams_snap.append(row)
         snapshots.append({'date': snap_date, 'label': label, 'prestige': prestige, 'teams': teams_snap})
 
     snapshots.sort(key=lambda x: x['date'])
@@ -707,6 +760,10 @@ for tournament in sorted(podiums['tournament'].unique()):
             if not team_name:
                 return None
             info = country_tournament_info(team_name, _tour, _yr)
+            # Era-aware display: a 1980 Soviet Union podium row needs to
+            # render "Soviet Union" inline while still linking to Russia.
+            final_d = _tournament_final_date_by_yt.get((_tour, int(_yr)))
+            era = display_name_at(team_name, final_d) if final_d else None
             block = {
                 'team':          team_name,
                 'flag':          country_flag(team_name),
@@ -718,6 +775,8 @@ for tournament in sorted(podiums['tournament'].unique()):
             disputed = DISPUTED_TITLES.get((_tour, _yr, finish_pos, team_name))
             if disputed:
                 block['disputed'] = disputed
+            if era and era != team_name:
+                block['display_name'] = era
             return block
 
         entries.append({

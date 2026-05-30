@@ -830,7 +830,7 @@ function renderStandings() {
     const cRank = confRankMap[t.team] || '-';
     const isStale = !!(prevDate && t.last_match_date && t.last_match_date <= prevDate);
     const slug = nameToSlug[t.team];
-    const cellInner = `<span style="margin-right:4px">${t.flag || ''}</span>${t.team}`;
+    const cellInner = `<span style="margin-right:4px">${t.flag || ''}</span>${t.display_name || t.team}`;
     const teamTd = slug
       ? `<td class="team-cell linked" data-team-slug="${slug}" data-season="${season}">${cellInner}</td>`
       : `<td class="team-cell">${cellInner}</td>`;
@@ -876,7 +876,10 @@ async function loadTeamsIndex() {
     const res = await fetch(`${BASE}/teams_index.json`);
     teamsIndex = await res.json();
     nameToSlug = {};
-    teamsIndex.forEach(t => { nameToSlug[t.name] = t.slug; });
+    teamsIndex.forEach(t => {
+      nameToSlug[t.name] = t.slug;
+      (t.historical_names || []).forEach(h => { nameToSlug[h] = t.slug; });
+    });
   } catch(e) {
     document.getElementById('team-select').innerHTML =
       '<option>Could not load teams</option>';
@@ -890,7 +893,9 @@ function populateTeams(confederation) {
   teamsIndex.filter(t => t.confederation === confederation).forEach(t => {
     const opt = document.createElement('option');
     opt.value = t.slug;
-    opt.textContent = t.flag ? `${t.flag} ${t.name}` : t.name;
+    const priors = (t.historical_names || []);
+    const baseLabel = t.flag ? `${t.flag} ${t.name}` : t.name;
+    opt.textContent = priors.length ? `${baseLabel} (${priors.join(' / ')})` : baseLabel;
     sel.appendChild(opt);
   });
   sel.disabled = false;
@@ -1118,7 +1123,7 @@ function renderLeagueHistory(league) {
     const disputedTag = t.disputed
       ? ` <span title="${t.disputed.replace(/"/g, '&quot;')}" style="background:#fde0e0;color:#c62828;border:1px solid #f5b3b3;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:4px;letter-spacing:0.5px;cursor:help">DISPUTED</span>`
       : '';
-    const cellInner = `<span style="margin-right:4px">${t.flag || ''}</span>${t.team}${countStr}${disputedTag}`;
+    const cellInner = `<span style="margin-right:4px">${t.flag || ''}</span>${t.display_name || t.team}${countStr}${disputedTag}`;
     if (preRated) {
       // Mirror DILLON: pre-rated team cells are not linked, and rating/rank
       // columns render as explicit gray dashes (not via the null-fallback).
@@ -1214,7 +1219,7 @@ function renderGoat() {
 
   const rows = teams.map(t => {
     const slug = nameToSlug[t.team];
-    const cellInner = `<span style="margin-right:4px">${t.flag || ''}</span>${t.team}`;
+    const cellInner = `<span style="margin-right:4px">${t.flag || ''}</span>${t.display_name || t.team}`;
     const teamTd = slug
       ? `<td class="team-cell linked" data-team-slug="${slug}" data-season="${t.season}">${cellInner}</td>`
       : `<td class="team-cell">${cellInner}</td>`;
