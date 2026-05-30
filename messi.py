@@ -23,7 +23,7 @@ window_game_days   = 200            # rolling game-day window (~10 months in 90s
                                     # weren't #1 at WC-end. Reverted: 200d's reactivity
                                     # (rank-swings on single-game losses) is accepted
                                     # behavior rather than a bug.
-margin_cap         = 4              # max goal margin (matches ZIDANE / COBI soccer family)
+margin_cap         = 8              # raised from 4 (ZIDANE/COBI default) per user 2026-05-30 to give intl soccer more margin signal headroom
 shootout_margin    = 0.5            # margin assigned to a shootout win
 home_field_adv     = 0.5            # per-game HCA on raw goal margin
 min_competitive_games = 5           # minimum NON-FRIENDLY games in window to appear in
