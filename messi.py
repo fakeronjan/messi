@@ -54,14 +54,14 @@ shootouts_url = 'https://raw.githubusercontent.com/martj42/international_results
 # ============================================================
 
 # WLS observation-weight uplifts for higher-tier tournaments. NOT applied
-# to margin — these encode "this game is a more reliable signal of team
+# to margin - these encode "this game is a more reliable signal of team
 # strength" via observation weight in the WLS solve. Everything not listed
 # defaults to 1.0x (qualifiers, regional cups, FIFA Series, etc.).
 TOURNAMENT_WEIGHTS = {
-    # Tier 1 — 2.0x: global pinnacle
+    # Tier 1 - 2.0x: global pinnacle
     'FIFA World Cup':                    2.0,
 
-    # Tier 2 — 1.5x: each confederation's peak championship (finals tournaments)
+    # Tier 2 - 1.5x: each confederation's peak championship (finals tournaments)
     'UEFA Euro':                         1.5,
     'Copa América':                      1.5,
     'African Cup of Nations':            1.5,
@@ -70,14 +70,14 @@ TOURNAMENT_WEIGHTS = {
     'CONCACAF Championship':             1.5,
     'Oceania Nations Cup':               1.5,
 
-    # Tier 3 — 1.25x: marquee one-offs + biennial nations leagues
+    # Tier 3 - 1.25x: marquee one-offs + biennial nations leagues
     'FIFA Confederations Cup':           1.25,
     'CONMEBOL–UEFA Cup of Champions':    1.25,
     'UEFA Nations League':               1.25,
     'CONCACAF Nations League':           1.25,
 }
 
-# Knockout tournaments with a final + third-place match — used for podium logic.
+# Knockout tournaments with a final + third-place match - used for podium logic.
 PODIUM_TOURNAMENTS = [
     'FIFA World Cup',
     'UEFA Euro',
@@ -159,7 +159,7 @@ COMPETITIVE_TOURNAMENTS = {
     'Melanesia Cup',
 }
 
-# U-23 events: not senior national-team lineups — exclude entirely.
+# U-23 events: not senior national-team lineups - exclude entirely.
 U23_TOURNAMENTS = {
     'Asian Games', 'Southeast Asian Games', 'South Asian Games',
     'East Asian Games', 'Pacific Games', 'South Pacific Games',
@@ -316,7 +316,7 @@ raw_df['date'] = pd.to_datetime(raw_df['date'])
 shootouts_df['date'] = pd.to_datetime(shootouts_df['date'])
 
 # Date filter + drop U-23 events. Everything else (competitive + friendlies)
-# stays in the dataset — friendlies will get downweighted via WLS observation
+# stays in the dataset - friendlies will get downweighted via WLS observation
 # weight rather than excluded outright.
 df = raw_df[
     (raw_df['date'] >= pd.to_datetime(start_date)) &
@@ -362,7 +362,7 @@ df['margin_away'] = -df['margin_home']
 # STEP 4 - HOME FIELD ADJUSTMENT
 # ============================================================
 # Per-game HFA on raw goal margin (pre-transform). Neutral venues get no
-# adjustment — WC finals, CFP-style neutrals, international kickoffs.
+# adjustment - WC finals, CFP-style neutrals, international kickoffs.
 
 df['hfa'] = np.where(df['neutral'] == True, 0, home_field_adv)
 df['adj_margin_home'] = df['margin_home'] - df['hfa']
@@ -397,7 +397,7 @@ df['home_win'] = np.where(
 )
 df['away_win'] = 1 - df['home_win']
 
-# Shootout overrides — winner gets full W, loser full L (for standings only,
+# Shootout overrides - winner gets full W, loser full L (for standings only,
 # margin is already set to ±shootout_margin for the rating solve)
 df.loc[shootout_mask & (df['shootout_winner'] == df['home_team']), 'home_win'] = 1
 df.loc[shootout_mask & (df['shootout_winner'] == df['home_team']), 'away_win'] = 0
@@ -436,7 +436,7 @@ print(f"After non-FIFA team drop: {len(df)} rows ({_n_before - len(df)} matches 
 
 # Append-only DB guard: the results CSV is re-fetched in full from a remote
 # source every run and overwritten. If that fetch comes back short, games we
-# already have would be silently deleted — and because grouped_date_id below is
+# already have would be silently deleted - and because grouped_date_id below is
 # positional, the date set shifting would also desync the ratings cache. Treat
 # the committed file as the database: fresh rows win on conflict (so score/data
 # corrections land), but games already stored that this run's fetch missed are
@@ -454,7 +454,7 @@ if os.path.exists('all_soccer_games.csv'):
     _pres = sum(1 for k in map(tuple, _prev[_key].astype(str).values) if k not in _fk)
     if _pres:
         print(f"[db-union] preserved {_pres:,} games already in the database "
-              f"that this run's fetch did not return (flaky source — not deleting history)")
+              f"that this run's fetch did not return (flaky source - not deleting history)")
     df = _combined.drop(columns=['_src_priority']).reset_index(drop=True)
 
 # ============================================================
@@ -474,7 +474,7 @@ print("Master game CSV saved: all_soccer_games.csv")
 # STEP 7b - LAST MATCH STRINGS
 # ============================================================
 # Format: "W vs. France 2-1 (UEFA Euro)" or "L @ Brazil 0-3 (Friendly)"
-# Includes friendlies — fans want to see the most recent game played
+# Includes friendlies - fans want to see the most recent game played
 # regardless of competitiveness.
 
 df['home_score_int'] = pd.to_numeric(df['home_score'], errors='coerce')
@@ -554,7 +554,7 @@ if messi_df is not None:
     mismatches = sum(1 for rid, d in cache_id_date.items() if cur_id_date.get(rid) != d)
     if mismatches:
         print(f"  cache desynced from current game dates "
-              f"({mismatches:,} ranking_id<->date mismatches) — full rebuild from scratch")
+              f"({mismatches:,} ranking_id<->date mismatches) - full rebuild from scratch")
         messi_df = None
 
 if messi_df is None:
@@ -869,7 +869,7 @@ final_df = final_df[[
 final_df.sort_values(['ranking_id', 'rank'], inplace=True)
 final_df.drop_duplicates(keep='first', inplace=True)
 
-# 1986+ cutoff (data quality cliff before — Maradona-era WC anchor)
+# 1986+ cutoff (data quality cliff before - Maradona-era WC anchor)
 final_df = final_df[final_df['date'] >= pd.to_datetime('1986-01-01').date()]
 
 # Eligibility filter: require min_competitive_games NON-FRIENDLY games in window.

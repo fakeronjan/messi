@@ -1,5 +1,5 @@
 """
-generate_data.py — reads messi_ratings_final.csv.gz and writes JSON for the MESSI web frontend.
+generate_data.py - reads messi_ratings_final.csv.gz and writes JSON for the MESSI web frontend.
 Run after messi.py. Outputs to docs/data/.
 
 Mirrors the ZIDANE site architecture (multiple competitions / leagues), adapted for
@@ -125,7 +125,7 @@ _COUNTRY_TO_ISO = {
     'Senegal': 'SN', 'Seychelles': 'SC', 'Sierra Leone': 'SL', 'Somalia': 'SO',
     'South Africa': 'ZA', 'South Sudan': 'SS', 'Sudan': 'SD', 'Tanzania': 'TZ',
     'Togo': 'TG', 'Tunisia': 'TN', 'Uganda': 'UG', 'Zambia': 'ZM',
-    'Zimbabwe': 'ZW', 'Zanzibar': '',  # Zanzibar — no flag emoji
+    'Zimbabwe': 'ZW', 'Zanzibar': '',  # Zanzibar - no flag emoji
     # AFC
     'Afghanistan': 'AF', 'Australia': 'AU', 'Bahrain': 'BH', 'Bangladesh': 'BD',
     'Bhutan': 'BT', 'Brunei': 'BN', 'Cambodia': 'KH', 'China': 'CN',
@@ -155,7 +155,7 @@ _UK_FLAGS = {
     'Northern Ireland': '🇬🇧',  # No tag sequence; fall back to UK flag
 }
 
-# Defunct entities — no flag (intentional)
+# Defunct entities - no flag (intentional)
 _DEFUNCT = {
     'Soviet Union', 'Yugoslavia', 'FR Yugoslavia', 'Serbia and Montenegro',
     'Czechoslovakia', 'East Germany', 'West Germany', 'German DR',
@@ -262,7 +262,7 @@ def host_flags(tournament, year):
 
 
 # Per-(country, year) → list of tournament finishes
-# Each entry: {tournament_short, finish} — used for honor badges with tournament context
+# Each entry: {tournament_short, finish} - used for honor badges with tournament context
 _country_year_finishes = {}
 for _, p in podiums.iterrows():
     key = (p['team'], int(p['year']))
@@ -447,11 +447,11 @@ with open('docs/data/current_standings.json', 'w') as f:
 # ── 2. GOAT table (top 50 country-year ratings at end of major tournaments) ─
 # Eligibility: medaled (1st, 2nd, or 3rd) in any major tournament that year.
 # Each team is then anchored at the SPECIFIC tournament's final date (the
-# moment they actually finished on the podium) — not whichever snapshot in
+# moment they actually finished on the podium) - not whichever snapshot in
 # the year had the highest rating. If a team medaled in multiple tournaments
 # in one year, we use the rating from whichever is highest.
 #
-# Also requires games_played >= 6 in the rolling window — filters teams
+# Also requires games_played >= 6 in the rolling window - filters teams
 # whose fakeronjan WLS rating comes from too small a sample of weak-confederation
 # opponents (e.g. Tahiti 2012 OFC only had 5 OFC qualifier games).
 print("Writing goat_teams.json...")
@@ -459,7 +459,7 @@ podiums = pd.read_csv('tournament_podiums.csv')
 GOAT_MIN_GAMES = 6
 
 # Medalist gate: 1st, 2nd, or 3rd in any major tournament. Matches the
-# cross-site GOAT convention established 2026-05-11 — every other site
+# cross-site GOAT convention established 2026-05-11 - every other site
 # filters its GOAT to "teams that contested for the championship" and this
 # is the soccer-international equivalent (medal = reached knockout rounds).
 _eligible_rows = (
@@ -549,7 +549,7 @@ team_data = df[(df['is_game_day'] == 1) | (df['is_end_of_season'] == 1) | (df['i
 team_data = team_data.sort_values(['country', 'date'])
 
 # (team, year) set of nations that actually played ≥1 game that year. Used to
-# drop "ghost" year entries — without this, defunct nations (Czechoslovakia
+# drop "ghost" year entries - without this, defunct nations (Czechoslovakia
 # 1994 etc.) and live-but-inactive nations (Mongolia 2025-26 etc.) get a
 # carried-over year-end snapshot from the rolling window even though they
 # played zero games that year.
@@ -581,7 +581,7 @@ for team in all_teams:
         if pd.isna(season):
             continue
         if (str(team), int(season)) not in played_team_years:
-            continue  # skip ghost year — team played 0 games
+            continue  # skip ghost year - team played 0 games
         finishes_for_year = country_year_finishes(team, season)
         won_continental = (team, int(season)) in _continental_winners
         rows = []
@@ -700,7 +700,7 @@ print("Writing champions.json...")
 
 # Per-tournament final-day lookup: for each podium tournament + year, find
 # the date of its FINAL match. Champions table needs to read each team's
-# rating as of THAT specific tournament's final day — not whichever EOS row
+# rating as of THAT specific tournament's final day - not whichever EOS row
 # happens to come first in the year. (Previously a country with multiple
 # podium tournaments in one year would get the earliest EOS rating, which
 # wildly understated e.g. France's 2022 WC rating because the CONCACAF
@@ -788,10 +788,10 @@ for tournament in sorted(podiums['tournament'].unique()):
         })
     champions[tournament] = entries
 
-# Pre-data tournament finishes — seed running counters with results from
+# Pre-data tournament finishes - seed running counters with results from
 # editions before our rated dataset begins (FIFA WC 1930-1978 not in our data,
 # Euro 1960-1976, etc.). Keys use team names as they appear in our data.
-# Defunct teams (Soviet Union, Yugoslavia, etc.) get seeded too — they just
+# Defunct teams (Soviet Union, Yugoslavia, etc.) get seeded too - they just
 # never accumulate further counts since they don't appear in post-data entries.
 PRE_DATA_TOURNAMENT_COUNTS = {
     'FIFA World Cup': {
@@ -827,7 +827,7 @@ PRE_DATA_TOURNAMENT_COUNTS = {
         'champion': {  # 1916-1983 (16 editions of varying frequency)
             'Uruguay': 13, 'Argentina': 12, 'Brazil': 3, 'Paraguay': 2, 'Peru': 2, 'Bolivia': 1,
         },
-        # Runner-ups and 3rd places not seeded — sparse pre-1987 records
+        # Runner-ups and 3rd places not seeded - sparse pre-1987 records
     },
     'AFC Asian Cup': {
         'champion': {  # 1956-1976
@@ -838,7 +838,7 @@ PRE_DATA_TOURNAMENT_COUNTS = {
         },
         # 3rd places pre-1980 not seeded
     },
-    # Nations Leagues started in 2018/2019 — no pre-data history
+    # Nations Leagues started in 2018/2019 - no pre-data history
 }
 
 
