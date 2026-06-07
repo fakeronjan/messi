@@ -35,6 +35,32 @@ friendly_weight    = 0.25           # WLS observation weight applied to friendli
                                     # (competitive games default to 1.0; tournament
                                     # tier uplift is multiplied on top via TOURNAMENT_WEIGHTS)
 
+# ── Confederation calibration (added 2026-06-07) ────────────────────────────
+# The match graph is 6 dense confederation clusters joined by thin bridges
+# (mostly down-weighted friendlies). The WLS solve pins WITHIN-confederation
+# ordering well, but the BETWEEN-confederation LEVEL rode on whatever cross-
+# confed friendlies were recently in the window - so the whole UEFA bloc could
+# lurch >1.0 in a day on two friendlies (Norway #5->#2 on 2026-03-26 without
+# playing). Fix = a confed<->team iterative calibration: each team is shrunk
+# toward its confederation's CALIBRATED level (partial pooling), and that level
+# is a slow multi-year estimate, re-estimated from the solved ratings but
+# anchored back to the slow value each pass. Within-confed reactivity is kept;
+# the bloc level stops twitching. See docs/calibration_plan.md.
+confed_prior_lambda      = 2.0       # partial-pooling strength: WLS weight on the
+                                     # per-team prior pulling each team toward its
+                                     # confederation level. Thin teams (few games)
+                                     # get pulled hard; rich teams (Spain, 40 games)
+                                     # barely move. Retires the Israel-1998 phantom
+                                     # at the root rather than hiding it post-hoc.
+confed_offset_years      = 8         # horizon for the slow cross-confederation level
+confed_offset_halflife_d = 3 * 365   # recency half-life (days) within that horizon;
+                                     # World Cup games (tier 2.0x) dominate the level
+recenter_anchor_alpha    = 0.6       # in the confed re-estimation blend, weight on the
+                                     # slow offset vs the solved bloc level (higher =
+                                     # more lurch-proof, lower = more reactive level)
+calibration_iters        = 3         # fixed K: confed -> team -> confed passes per
+                                     # snapshot. Deterministic from games (caches cleanly)
+
 # WLS: weights affect observation influence, not margin magnitude.
 # Margin transform (cap=4) + per-game HCA + shootout handling all applied
 # UPSTREAM. The solver takes pre-prepped adj_margin_home as response, and the
@@ -253,7 +279,7 @@ CONFEDERATION_MAP = {
 }
 
 
-def _solve_wls(window_df):
+def _solve_wls(window_df, confed_prior=None, prior_lambda=0.0):
     """
     Homebrew weighted-least-squares fakeronjan WLS solver. Mirrors ZIDANE / COBI.
 
@@ -264,15 +290,26 @@ def _solve_wls(window_df):
     Soccer-specific transforms (shootout handling, cap clip, per-game HFA)
     are applied UPSTREAM in the data-prep step. The solver just does WLS
     on the pre-prepped response variable.
+
+    PARTIAL POOLING (Layer 1): when confed_prior {confederation: level} and
+    prior_lambda > 0 are supplied, one extra observation row per team is added
+    pulling that team's rating toward its confederation's level with weight
+    prior_lambda. This is a ridge that shrinks toward the confed level (not 0):
+    thin-evidence teams get dragged to "average team in their confederation"
+    while well-observed teams override the prior and keep their earned rating.
     """
     teams = sorted(set(window_df["home_team"]) | set(window_df["away_team"]))
     team_idx = {t: i for i, t in enumerate(teams)}
     n_teams = len(teams)
     n_games = len(window_df)
 
-    X = np.zeros((n_games + 1, n_teams))
-    y = np.zeros(n_games + 1)
-    w = np.zeros(n_games + 1)
+    use_prior = bool(confed_prior) and prior_lambda > 0
+    n_prior = n_teams if use_prior else 0
+    n_rows = n_games + 1 + n_prior
+
+    X = np.zeros((n_rows, n_teams))
+    y = np.zeros(n_rows)
+    w = np.zeros(n_rows)
 
     adj_margin = window_df["adj_margin_home"].to_numpy(dtype=float)
     weights    = window_df["weight"].to_numpy(dtype=float)
@@ -287,9 +324,16 @@ def _solve_wls(window_df):
     w[:n_games] = weights
 
     # Zero-sum constraint via high-weight extra row.
-    X[-1, :] = 1.0
-    y[-1] = 0.0
-    w[-1] = 1.0e8
+    X[n_games, :] = 1.0
+    y[n_games] = 0.0
+    w[n_games] = 1.0e8
+
+    # Per-team prior rows: shrink toward confederation level.
+    if use_prior:
+        for j, t in enumerate(teams):
+            X[n_games + 1 + j, j] = 1.0
+            y[n_games + 1 + j] = confed_prior.get(CONFEDERATION_MAP.get(t), 0.0)
+            w[n_games + 1 + j] = prior_lambda
 
     sqrt_w = np.sqrt(w)
     Xw = X * sqrt_w[:, None]
@@ -299,6 +343,83 @@ def _solve_wls(window_df):
     out = pd.DataFrame({"name": teams, "rating": r})
     out["rank"] = out["rating"].rank(ascending=False, method="min").astype(int)
     return out
+
+
+def _confed_offset(cross_win, as_of_date, halflife_days):
+    """
+    Layer 2: slow cross-confederation level. Treats each confederation as a
+    single 'super-team' and solves the cross-confederation games over the
+    recency-weighted multi-year window. Returns {confederation: level}.
+
+    Pure function of games (no cache dependency). Cross-confed games are the
+    only ones carrying between-confederation signal; World Cup games (tier
+    2.0x) dominate, friendlies (0.25x) are present but muted. Returns {} when
+    there is too little cross-confed evidence (early years) - callers then fall
+    back to a zero prior (shrink toward global mean).
+    """
+    if len(cross_win) < 30:
+        return {}
+    confs = sorted(set(cross_win["home_confederation"]) | set(cross_win["away_confederation"]))
+    cidx = {c: i for i, c in enumerate(confs)}
+    n = len(confs)
+    ng = len(cross_win)
+
+    days_ago = (as_of_date - cross_win["date"]).dt.days.to_numpy(dtype=float)
+    rec = 0.5 ** (days_ago / halflife_days)
+    w = rec * cross_win["tier_weight"].to_numpy(float) * cross_win["match_type_weight"].to_numpy(float)
+    hc = cross_win["home_confederation"].to_numpy()
+    ac = cross_win["away_confederation"].to_numpy()
+    adj = cross_win["adj_margin_home"].to_numpy(float)
+
+    X = np.zeros((ng + 1, n)); y = np.zeros(ng + 1); ww = np.zeros(ng + 1)
+    for k in range(ng):
+        X[k, cidx[hc[k]]] =  1.0
+        X[k, cidx[ac[k]]] = -1.0
+    y[:ng] = adj; ww[:ng] = w
+    X[-1, :] = 1.0; ww[-1] = 1.0e8
+
+    sw = np.sqrt(ww)
+    r, *_ = np.linalg.lstsq(X * sw[:, None], y * sw, rcond=None)
+    return dict(zip(confs, r))
+
+
+def _calibrated_solve(window_df, base_offset, cgp_lookup):
+    """
+    Layers 1+3 together: a fixed-K confederation<->team iterative calibration.
+
+      c = slow confed offset (Layer 2)
+      repeat K times:
+          ranked = solve teams, each shrunk toward c          (Layer 1)
+          c = alpha*base_offset + (1-alpha)*(solved bloc levels)   (Layer 3)
+                (re-estimated each pass, but ANCHORED to the slow offset so the
+                 loop converges near the slow level instead of chasing the
+                 reactive window - which is what kills the bloc lurch)
+
+    Returns the final iteration's ranked DataFrame (name, rating, rank).
+    """
+    confs = sorted({CONFEDERATION_MAP.get(t) for t in
+                    set(window_df["home_team"]) | set(window_df["away_team"])} - {None})
+    prior = {c: base_offset.get(c, 0.0) for c in confs}
+    ranked = None
+    for it in range(calibration_iters):
+        ranked = _solve_wls(window_df, prior, confed_prior_lambda)
+        if it < calibration_iters - 1:
+            r = ranked.copy()
+            r["conf"] = r["name"].map(CONFEDERATION_MAP)
+            r["cgp"] = r["name"].map(cgp_lookup).fillna(0)
+            lev = {}
+            for c in confs:
+                sub = r[(r["conf"] == c) & (r["cgp"] >= min_competitive_games)].nlargest(8, "rating")
+                lev[c] = sub["rating"].mean() if len(sub) else np.nan
+            blended = {
+                c: (recenter_anchor_alpha * base_offset.get(c, 0.0)
+                    + (1 - recenter_anchor_alpha) * lev[c]) if pd.notna(lev[c])
+                   else base_offset.get(c, 0.0)
+                for c in confs
+            }
+            m = np.mean(list(blended.values())) if blended else 0.0
+            prior = {c: blended[c] - m for c in confs}   # demean: only relative level matters
+    return ranked
 
 
 # ============================================================
@@ -575,6 +696,14 @@ else:
         print(f"Existing ratings found. Ranked IDs: {min_id_ranked} to {max_id_ranked}")
 
 last_printed_ym = None
+
+# Cross-confederation games only carry between-confederation signal; pre-slice
+# once. The slow confed offset (Layer 2) is recomputed once per calendar month
+# (it barely moves day-to-day over an 8yr window) and reused within the month.
+cross_all = df[df['home_confederation'] != df['away_confederation']].copy()
+_offset = {}
+_offset_ym = None
+
 for i in range(min_date_id, max_date_id + 1):
 
     if min_id_ranked <= i <= max_id_ranked:
@@ -617,7 +746,22 @@ for i in range(min_date_id, max_date_id + 1):
         last_printed_ym = current_ym
 
     try:
-        ranked = _solve_wls(working_df)
+        # Competitive (non-friendly) game counts: feed both the calibration
+        # bloc-means (Layer 3) and the final eligibility filter.
+        comp_df = working_df[working_df['match_type'] == 'competitive']
+        cgp_lookup = pd.concat([comp_df['home_team'], comp_df['away_team']]).value_counts()
+
+        # Layer 2: refresh the slow confederation offset once per calendar month.
+        if current_ym != _offset_ym:
+            cross_win = cross_all[
+                (cross_all['date'] > current_date - pd.Timedelta(days=365 * confed_offset_years)) &
+                (cross_all['date'] <= current_date)
+            ]
+            _offset = _confed_offset(cross_win, current_date, confed_offset_halflife_d)
+            _offset_ym = current_ym
+
+        # Layers 1+3: fixed-K confederation<->team iterative calibration.
+        ranked = _calibrated_solve(working_df, _offset, cgp_lookup)
         if ranked['rating'].isna().any() or np.isinf(ranked['rating']).any():
             continue
 
@@ -625,27 +769,11 @@ for i in range(min_date_id, max_date_id + 1):
         ranked['ranking_date'] = current_date.date()
         ranked['season']       = season
 
-        home_gp = working_df.groupby('home_team').size().reset_index(name='gp_home')
-        away_gp = working_df.groupby('away_team').size().reset_index(name='gp_away')
-        home_gp.columns = ['name', 'gp_home']
-        away_gp.columns = ['name', 'gp_away']
-        gp = pd.merge(home_gp, away_gp, on='name', how='outer').fillna(0)
-        gp['games_played'] = (gp['gp_home'] + gp['gp_away']).astype(int)
-
-        # Competitive (non-friendly) game counts feed the eligibility filter.
-        comp_df = working_df[working_df['match_type'] == 'competitive']
-        comp_home = comp_df.groupby('home_team').size().reset_index(name='cgp_home')
-        comp_away = comp_df.groupby('away_team').size().reset_index(name='cgp_away')
-        comp_home.columns = ['name', 'cgp_home']
-        comp_away.columns = ['name', 'cgp_away']
-        cgp = pd.merge(comp_home, comp_away, on='name', how='outer').fillna(0)
-        cgp['competitive_games_played'] = (cgp['cgp_home'] + cgp['cgp_away']).astype(int)
-        gp = pd.merge(gp, cgp[['name', 'competitive_games_played']], on='name', how='left')
-        gp['competitive_games_played'] = gp['competitive_games_played'].fillna(0).astype(int)
-
-        ranked = pd.merge(ranked, gp[['name', 'games_played', 'competitive_games_played']], on='name', how='left')
-        ranked['games_played'] = ranked['games_played'].fillna(0).astype(int)
-        ranked['competitive_games_played'] = ranked['competitive_games_played'].fillna(0).astype(int)
+        # Total games played (all match types) for output/display.
+        gp_tot = working_df.groupby('home_team').size().add(
+                 working_df.groupby('away_team').size(), fill_value=0)
+        ranked['games_played'] = ranked['name'].map(gp_tot).fillna(0).astype(int)
+        ranked['competitive_games_played'] = ranked['name'].map(cgp_lookup).fillna(0).astype(int)
 
         messi_df = pd.concat([messi_df, ranked], axis=0, sort=False).reset_index(drop=True)
 
