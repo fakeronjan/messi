@@ -16,13 +16,20 @@ warnings.filterwarnings('ignore')
 # ============================================================
 
 start_date         = '1980-01-01'   # first date to include in dataset
-window_game_days   = 200            # rolling game-day window (~10 months in 90s era,
-                                    # ~22 months in modern era). Tested 400 on 2026-05-23
-                                    # to dampen the France 2000 whipsaw, but it over-
-                                    # propped Brazil (12/50 GOAT) and WC champions often
-                                    # weren't #1 at WC-end. Reverted: 200d's reactivity
-                                    # (rank-swings on single-game losses) is accepted
-                                    # behavior rather than a bug.
+window_years       = 3              # rolling CALENDAR-year window for team ratings (changed
+                                    # 2026-06-07 from a 200 game-day window). Calendar years
+                                    # keep the horizon consistent regardless of game-day
+                                    # density / scheduling, which fits the lumpy international
+                                    # calendar. The old 200-day window collapsed idle elites
+                                    # during pre-tournament friendly lulls (Argentina #7->#19
+                                    # without a loss) because their competitive pedigree aged
+                                    # out. 3yr retains pedigree; tested 5yr but it re-propped
+                                    # Brazil (padded blowouts accumulate). Recency half-life
+                                    # (below) does the responsiveness work, decoupled from the
+                                    # window length.
+recency_halflife_years = 1.5        # exponential recency half-life within the window. Recent
+                                    # form dominates; a long light-weighted tail of pedigree
+                                    # keeps proven teams from evaporating during lulls.
 margin_cap         = 8              # raised from 4 (ZIDANE/COBI default) per user 2026-05-30 to give intl soccer more margin signal headroom
 shootout_margin    = 0.5            # margin assigned to a shootout win
 home_field_adv     = 0.5            # per-game HCA on raw goal margin
@@ -46,12 +53,14 @@ friendly_weight    = 0.25           # WLS observation weight applied to friendli
 # is a slow multi-year estimate, re-estimated from the solved ratings but
 # anchored back to the slow value each pass. Within-confed reactivity is kept;
 # the bloc level stops twitching. See docs/calibration_plan.md.
-confed_prior_lambda      = 2.0       # partial-pooling strength: WLS weight on the
+confed_prior_lambda      = 1.0       # partial-pooling strength: WLS weight on the
                                      # per-team prior pulling each team toward its
-                                     # confederation level. Thin teams (few games)
-                                     # get pulled hard; rich teams (Spain, 40 games)
-                                     # barely move. Retires the Israel-1998 phantom
-                                     # at the root rather than hiding it post-hoc.
+                                     # confederation level. Lowered 2.0->1.0 on 2026-06-07
+                                     # with the move to a 3yr window: the longer window now
+                                     # does most of the thin-team work (a team is rarely
+                                     # thin-in-window), so a gentler prior suffices and
+                                     # avoids over-shrinking idle elites toward the confed
+                                     # mean. Thin teams still get pulled; rich teams barely.
 confed_offset_years      = 8         # horizon for the slow cross-confederation level
 confed_offset_halflife_d = 3 * 365   # recency half-life (days) within that horizon;
                                      # World Cup games (tier 2.0x) dominate the level
@@ -426,9 +435,28 @@ def _calibrated_solve(window_df, base_offset, cgp_lookup):
 # STEP 1 - LOAD AND CLEAN THE RAW DATA
 # ============================================================
 
+# Team-name normalization: collapse source-side renames to one canonical name.
+# The source (martj42) renamed "China PR" -> "China" wholesale (~2026-04). Left
+# unmerged, the append-only db-union below preserves the orphaned "China PR"
+# rows forever, duplicating the entire national team. Normalize at load so the
+# dedup collapses them. Any future rename should be added here (the orphan guard
+# in STEP 6b prints a WARNING when one appears).
+TEAM_NAME_NORMALIZATION = {
+    'China PR': 'China',
+}
+
+def _normalize_team_names(frame, cols):
+    for c in cols:
+        if c in frame.columns:
+            frame[c] = frame[c].replace(TEAM_NAME_NORMALIZATION)
+    return frame
+
 print("Loading results from GitHub...")
 raw_df = pd.read_csv(data_url)
 shootouts_df = pd.read_csv(shootouts_url)
+
+_normalize_team_names(raw_df, ['home_team', 'away_team'])
+_normalize_team_names(shootouts_df, ['home_team', 'away_team', 'winner'])
 
 print(f"Raw results loaded: {len(raw_df)} rows")
 print(f"Shootouts loaded: {len(shootouts_df)} rows")
@@ -566,6 +594,19 @@ if os.path.exists('all_soccer_games.csv'):
     _prev = pd.read_csv('all_soccer_games.csv')
     _prev['date'] = pd.to_datetime(_prev['date'], errors='coerce')
     _prev = _prev.drop(columns=[c for c in ('grouped_date_id', 'unique_game_id') if c in _prev.columns])
+    # Normalize committed names too, so a source rename collapses on the dedup
+    # below instead of leaving an orphaned duplicate of the renamed team.
+    _normalize_team_names(_prev, ['home_team', 'away_team', 'shootout_winner'])
+
+    # Orphan-rename guard: any team in the committed DB that the live source no
+    # longer uses is a likely source rename - it will be permanently duplicated
+    # by the preservation logic below unless added to TEAM_NAME_NORMALIZATION.
+    _src_teams = set(raw_df['home_team']) | set(raw_df['away_team'])
+    _orphans = (set(_prev['home_team']) | set(_prev['away_team'])) - _src_teams - {np.nan}
+    if _orphans:
+        print(f"WARNING: {len(_orphans)} team(s) in committed DB absent from live source "
+              f"(possible source rename - add to TEAM_NAME_NORMALIZATION): {sorted(str(t) for t in _orphans)}")
+
     _key = ['date', 'home_team', 'away_team']
     _fresh = df.copy();  _fresh['_src_priority'] = 0
     _prevp = _prev.copy(); _prevp['_src_priority'] = 1
@@ -642,8 +683,8 @@ lastmatch_df['season'] = pd.to_datetime(lastmatch_df['date']).dt.year.astype('in
 # ============================================================
 # STEP 8 - ROLLING WLS RATINGS (MESSI)
 # ============================================================
-# One snapshot per game-day, rolling window_game_days game-days. WLS
-# observation weight per game = recency × tournament tier × match type.
+# One snapshot per game-day; each uses a rolling window_years calendar window.
+# WLS observation weight per game = recency × tournament tier × match type.
 # Incremental: skips date IDs already in messi_ratings.csv.gz cache.
 # Cache is gzipped per the soccer-family convention (would exceed
 # GitHub's 50MB recommendation uncompressed).
@@ -713,17 +754,22 @@ for i in range(min_date_id, max_date_id + 1):
     if pd.isnull(current_date):
         continue
 
+    # Calendar-year window: all games within the last window_years of this
+    # game-day. Snapshot cadence stays one-per-game-day (ranking_id = i).
+    window_start = current_date - pd.DateOffset(years=window_years)
     working_df = df.loc[
-        (df['grouped_date_id'] >= i - window_game_days + 1) &
-        (df['grouped_date_id'] <= i)
+        (df['date'] > window_start) &
+        (df['date'] <= current_date)
     ].copy()
 
     if len(working_df) < 10:
         continue
 
-    # Combined WLS observation weight: recency × tier × match_type
-    working_df['game_days_ago'] = i - working_df['grouped_date_id']
-    working_df['date_weight'] = 1 - (working_df['game_days_ago'] / window_game_days)
+    # Combined WLS observation weight: recency × tier × match_type.
+    # Recency is an exponential half-life in CALENDAR days (decoupled from the
+    # window length): recent form dominates, older pedigree lingers lightly.
+    working_df['days_ago'] = (current_date - working_df['date']).dt.days
+    working_df['date_weight'] = 0.5 ** (working_df['days_ago'] / (recency_halflife_years * 365.0))
     working_df['weight'] = (
         working_df['date_weight'] *
         working_df['tier_weight'] *

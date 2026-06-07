@@ -391,7 +391,7 @@
 <header>
   <h1>MESSI 🌍⚽</h1>
   <p class="subtitle">International Soccer Power Rankings · Alpha</p>
-  <p class="model-note">Considers strength of opponent, margin of result, and recency. Reads as approximate goals-spread vs avg team. ~1.5 = contender; ~2 = elite; ~3 = generational (Germany 2014 = 3.15).</p>
+  <p class="model-note">Considers strength of opponent, margin of result, and recency. Reads as approximate goals-spread vs avg team. ~2 = contender; ~2.7 = elite; ~3.5 = generational (Germany 2014 = 3.73).</p>
   <p class="updated"><span class="cadence-inline">🔄 Updated daily</span> <span class="cadence-sep">|</span> <span id="last-updated">Loading...</span> <span class="cadence-sep">|</span> <span id="last-refreshed">Loading...</span></p>
 </header>
 
@@ -697,12 +697,12 @@ function attachLinks() {
 const _PLACEHOLDER_LM = new Set(['No match yet', 'No competitive match yet', 'No Game', 'Bye / No Game']);
 function displayMatch(s) { return (!s || _PLACEHOLDER_LM.has(s)) ? '' : s; }
 
-const BAR_MIN = -4, BAR_MAX = 4, BAR_RANGE = 8;
+const BAR_MIN = -5, BAR_MAX = 5, BAR_RANGE = 10;
 
 function ratingBar(rating) {
   if (rating == null) return '<span style="color:#bbb">-</span>';
   const clipped = Math.max(BAR_MIN, Math.min(BAR_MAX, rating));
-  // 0.0 sits at 50% of the track; each unit = 12.5% of track width
+  // 0.0 sits at 50% of the track; each unit = 10% of track width
   let leftPct, widthPct;
   if (clipped >= 0) {
     leftPct  = 50;

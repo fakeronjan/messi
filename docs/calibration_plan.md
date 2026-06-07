@@ -95,3 +95,48 @@ anti-phantom defense — ridge handles that; the floor still catches the
   plus the deeper lurch. Combined with live WC 2026 cross-confed data, it's the
   natural Alpha → Beta trigger — gate promotion on WC behaving sanely under the
   new calibration, not just the backtest.
+
+---
+
+## Update v2 (2026-06-07): calendar window + China dedup
+
+The first cut (200 game-day window, λ=2) shipped, then surfaced a real flaw:
+**idle elites collapsed during pre-tournament friendly lulls.** Argentina fell
+#7 → #19 with no loss — its competitive pedigree (2024 Copa, 2025 qualifiers)
+aged out of the 200-day window, leaving only weak friendlies, and λ=2 partial
+pooling then over-shrank it toward the confed mean. No single λ fixed both the
+lurch and the collapse (they trade off monotonically), so the window was the
+right lever.
+
+- **Window: 200 game-days → 3 CALENDAR years**, with an exponential **1.5yr
+  half-life** (decoupled from the window length). Calendar years keep the
+  horizon stable across the lumpy international calendar; the half-life carries
+  responsiveness while a light tail of pedigree keeps proven teams alive through
+  lulls. Tested 5yr but it **re-propped Brazil** (padded blowouts accumulate);
+  3yr is the balance. `confed_prior_lambda` lowered **2.0 → 1.0** (the longer
+  window does most of the thin-team work, so a gentler prior suffices).
+- **China-PR dedup:** the source renamed `China PR → China` ~2026-04; the
+  append-only db-union preserved the orphaned old name, duplicating the entire
+  team. Fixed with `TEAM_NAME_NORMALIZATION` (applied to fresh + committed rows
+  before dedup) + an **orphan-rename WARNING guard** so the next such rename is
+  caught immediately instead of silently duplicating for months.
+- **Validation on rebuild:** Argentina **#5** (un-collapsed), China single entry,
+  **champions 8/10 at #1**, March lurch +1.10 → **+0.24**, GOAT balanced 10
+  UEFA / 9 CONMEBOL. Scale shifted up (top ~3.5, peaks ~4.0) → UI bar ±4 → ±5,
+  tiers → ~2 / ~2.7 / ~3.5 (Germany 2014 = 3.73).
+
+### Deferred — next iteration: quality-adjusted confed offset
+
+The one residual is **Brazil 1997 at GOAT #1** (a Copa winner over WC-champion
+Germany 2014). Probed and traced to **Layer 2**: CONMEBOL's offset (+0.82, above
+UEFA) is created **entirely by Argentina & Brazil** — remove their cross-confed
+games and CONMEBOL drops to +0.54, *below* UEFA's +0.86; their direct H2H vs
+UEFA is +0.97 with Arg/Bra but −0.14 without. The super-team solve reads the two
+giants' quality as the whole confederation's level, then partial pooling stamps
+it onto every CONMEBOL team. **Cheap fixes don't work** (a per-team weight cap
+moves the level *unpredictably* — the zero-sum super-team solve is too
+sensitive). The proper fix is a **quality-adjusted offset**: attribute a
+cross-confed result to the participating teams' own strength first and only the
+*residual* to the confederation — a joint/iterative estimation (circular with
+the within-confed ratings), deserving its own design + validation pass. Brazil
+1997 #1 is a defensible interim (a 37-8-2 Copa-winning Ronaldo/Romário dynasty).
