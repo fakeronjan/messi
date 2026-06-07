@@ -3,8 +3,8 @@ AFC Asian Cup,1980,Kuwait,1
 AFC Asian Cup,1980,South Korea,2
 AFC Asian Cup,1980,Iran,3
 AFC Asian Cup,1984,Saudi Arabia,1
-AFC Asian Cup,1984,China PR,2
-AFC Asian Cup,1984,China,3
+AFC Asian Cup,1984,China,2
+AFC Asian Cup,1984,China PR,3
 AFC Asian Cup,1988,Saudi Arabia,1
 AFC Asian Cup,1988,South Korea,2
 AFC Asian Cup,1988,Iran,3
@@ -15,7 +15,7 @@ AFC Asian Cup,1996,United Arab Emirates,2
 AFC Asian Cup,2000,Japan,1
 AFC Asian Cup,2000,Saudi Arabia,2
 AFC Asian Cup,2004,Japan,1
-AFC Asian Cup,2004,China,2
+AFC Asian Cup,2004,China PR,2
 AFC Asian Cup,2004,Iran,3
 AFC Asian Cup,2007,Iraq,1
 AFC Asian Cup,2007,Saudi Arabia,2
@@ -96,14 +96,14 @@ African Cup of Nations,2022,Egypt,2
 African Cup of Nations,2022,Cameroon,3
 African Cup of Nations,2024,Ivory Coast,1
 African Cup of Nations,2024,Nigeria,2
-African Cup of Nations,2025,Burkina Faso,1
-African Cup of Nations,2025,Sudan,2
-African Cup of Nations,2025,DR Congo,3
+African Cup of Nations,2025,Ivory Coast,1
+African Cup of Nations,2025,Gabon,2
 African Cup of Nations,2026,Morocco,1
 African Cup of Nations,2026,Senegal,2
 African Cup of Nations,2026,Nigeria,3
-CONCACAF Nations League,2019,Mexico,1
-CONCACAF Nations League,2019,Bermuda,2
+CONCACAF Nations League,2019,United States,1
+CONCACAF Nations League,2019,Cuba,2
+CONCACAF Nations League,2019,Suriname,3
 CONCACAF Nations League,2021,United States,1
 CONCACAF Nations League,2021,Mexico,2
 CONCACAF Nations League,2023,Saint Martin,1
@@ -111,7 +111,6 @@ CONCACAF Nations League,2023,Bonaire,2
 CONCACAF Nations League,2023,Montserrat,3
 CONCACAF Nations League,2024,Dominican Republic,1
 CONCACAF Nations League,2024,Bermuda,2
-CONCACAF Nations League,2024,Curaçao,3
 CONCACAF Nations League,2025,Mexico,1
 CONCACAF Nations League,2025,Panama,2
 Copa América,1987,Uruguay,1
@@ -282,18 +281,15 @@ UEFA Euro,2024,Spain,1
 UEFA Euro,2024,England,2
 UEFA Nations League,2018,Scotland,1
 UEFA Nations League,2018,Israel,2
-UEFA Nations League,2018,Norway,3
 UEFA Nations League,2019,Portugal,1
 UEFA Nations League,2019,Netherlands,2
-UEFA Nations League,2020,Armenia,1
-UEFA Nations League,2020,North Macedonia,2
-UEFA Nations League,2020,Montenegro,3
+UEFA Nations League,2020,Wales,1
+UEFA Nations League,2020,Finland,2
 UEFA Nations League,2021,France,1
 UEFA Nations League,2021,Spain,2
 UEFA Nations League,2023,Spain,1
 UEFA Nations League,2023,Croatia,2
-UEFA Nations League,2024,Slovakia,1
-UEFA Nations League,2024,Estonia,2
-UEFA Nations League,2024,Spain,3
+UEFA Nations League,2024,Montenegro,1
+UEFA Nations League,2024,Turkey,2
 UEFA Nations League,2025,Portugal,1
 UEFA Nations League,2025,Spain,2
