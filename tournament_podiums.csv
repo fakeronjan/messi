@@ -95,8 +95,9 @@ African Cup of Nations,2022,Egypt,2
 African Cup of Nations,2022,Cameroon,3
 African Cup of Nations,2024,Ivory Coast,1
 African Cup of Nations,2024,Nigeria,2
-African Cup of Nations,2025,Cameroon,1
-African Cup of Nations,2025,Mozambique,2
+African Cup of Nations,2025,Burkina Faso,1
+African Cup of Nations,2025,Sudan,2
+African Cup of Nations,2025,DR Congo,3
 African Cup of Nations,2026,Morocco,1
 African Cup of Nations,2026,Senegal,2
 African Cup of Nations,2026,Nigeria,3
@@ -117,8 +118,8 @@ Copa América,1987,Chile,2
 Copa América,1987,Colombia,3
 Copa América,1989,Brazil,1
 Copa América,1989,Uruguay,2
-Copa América,1991,Argentina,1
-Copa América,1991,Colombia,2
+Copa América,1991,Brazil,1
+Copa América,1991,Chile,2
 Copa América,1993,Argentina,1
 Copa América,1993,Mexico,2
 Copa América,1993,Colombia,3
@@ -243,9 +244,8 @@ Oceania Nations Cup,2002,New Zealand,1
 Oceania Nations Cup,2002,Australia,2
 Oceania Nations Cup,2004,Australia,1
 Oceania Nations Cup,2004,Solomon Islands,2
-Oceania Nations Cup,2007,New Caledonia,1
-Oceania Nations Cup,2007,Fiji,2
-Oceania Nations Cup,2007,New Zealand,3
+Oceania Nations Cup,2007,New Zealand,1
+Oceania Nations Cup,2007,Vanuatu,2
 Oceania Nations Cup,2008,Fiji,1
 Oceania Nations Cup,2008,New Zealand,2
 Oceania Nations Cup,2012,Tahiti,1
@@ -279,8 +279,8 @@ UEFA Euro,2021,Italy,1
 UEFA Euro,2021,England,2
 UEFA Euro,2024,Spain,1
 UEFA Euro,2024,England,2
-UEFA Nations League,2018,Scotland,1
-UEFA Nations League,2018,Israel,2
+UEFA Nations League,2018,Kosovo,1
+UEFA Nations League,2018,Azerbaijan,2
 UEFA Nations League,2019,Portugal,1
 UEFA Nations League,2019,Netherlands,2
 UEFA Nations League,2020,Albania,1
@@ -289,8 +289,5 @@ UEFA Nations League,2021,France,1
 UEFA Nations League,2021,Spain,2
 UEFA Nations League,2023,Spain,1
 UEFA Nations League,2023,Croatia,2
-UEFA Nations League,2024,Czech Republic,1
-UEFA Nations League,2024,Georgia,2
-UEFA Nations League,2024,Spain,3
 UEFA Nations League,2025,Portugal,1
 UEFA Nations League,2025,Spain,2
