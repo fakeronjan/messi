@@ -657,6 +657,12 @@ for _tname, (_lbl, _prestige) in _TOURNAMENT_LABELS.items():
     _next_date = _sub['date'].shift(-1)
     _is_final = _next_date.isna() | ((_next_date - _sub['date']).dt.days > 90)
     for _d in _sub.loc[_is_final, 'date'].dt.date:
+        # In-progress gate: the gap detector flags an edition's last PLAYED
+        # game-day as its "final", but for a live tournament (no podium yet)
+        # that's just the latest group game - don't label it "X Final". Only
+        # label editions that have actually concluded (curated podium exists).
+        if (_tname, _d.year) not in _podium_editions:
+            continue
         _date_str = str(_d)
         if _date_str not in date_label_map or date_label_map[_date_str][1] > _prestige:
             date_label_map[_date_str] = (_lbl, _prestige)
