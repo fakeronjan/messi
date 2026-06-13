@@ -10,6 +10,7 @@ import pandas as pd
 import json
 import os
 import re
+import glob
 from datetime import datetime, timezone
 from bisect import bisect_right
 
@@ -360,6 +361,9 @@ _team_year_last_game = (
       .groupby(['country', 'year'])['date'].max().to_dict()
 )
 
+# In-progress-year gate: the current calendar year is not over, so its
+# fallback anchor must NOT read "End of year" (see in-progress-season-gate).
+_CURRENT_YEAR = datetime.now(timezone.utc).year
 _team_year_anchor = {}  # (team, year_int) -> (Timestamp, label)
 for (team, year_f), last_game in _team_year_last_game.items():
     year = int(year_f)
@@ -384,9 +388,11 @@ for (team, year_f), last_game in _team_year_last_game.items():
                 if d is not None:
                     chosen = (d, f'End of {_t}')
                     break
-    # 4. Fallback: last game-day of the year
+    # 4. Fallback: last game-day of the year. A year still in progress (the
+    #    current calendar year) is NOT over - label it "Current" so a live year
+    #    (e.g. mid-2026 World Cup) isn't shown as a completed end-of-year snapshot.
     if chosen is None:
-        chosen = (last_game, 'End of year')
+        chosen = (last_game, 'End of year' if year < _CURRENT_YEAR else 'Current')
     _team_year_anchor[(team, year)] = chosen
 
 # Per-row flag + label string for the year-anchor row of each team-year
@@ -614,6 +620,16 @@ for team in all_teams:
 teams_index.sort(key=lambda x: x['name'])
 with open('docs/data/teams_index.json', 'w') as f:
     json.dump(teams_index, f, separators=(',', ':'))
+
+# Prune orphaned team files: when the data source renames a country (e.g.
+# 'China PR' -> 'China') or drops one, the old-slug file lingers - unreachable
+# from the UI (not in teams_index) but serving frozen, stale data. Remove any
+# team file whose slug is no longer in the live index.
+_live_team_files = {f"{t['slug']}.json" for t in teams_index}
+for _f in glob.glob('docs/data/teams/*.json'):
+    if os.path.basename(_f) not in _live_team_files:
+        os.remove(_f)
+        print(f"  Pruned orphaned team file: {os.path.basename(_f)}")
 
 # ── 4. Season standings files (one per year) ──────────────────────────────────
 # Tournament-end labels: map a date to (label, prestige) for major tournaments.
