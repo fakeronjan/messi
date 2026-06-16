@@ -4,3 +4,6 @@ __pycache__/
 Backup*/
 messi_diag.py
 messi_ratings_final.csv
+
+# Engine-migration backup snapshots (never commit)
+*-bak
