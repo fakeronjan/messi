@@ -74,7 +74,6 @@ calibration_iters        = 3         # fixed K: confed -> team -> confed passes 
 # Margin transform (cap=4) + per-game HCA + shootout handling all applied
 # UPSTREAM. The solver takes pre-prepped adj_margin_home as response, and the
 # combined weight (recency × tournament tier × match type) as observation weight.
-WEIGHTING_MODE = "wls"
 
 # Re-process the most recent N ranking_ids (game-days) on every run so late-
 # arriving data is absorbed. International games can post hours after final
