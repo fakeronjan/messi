@@ -776,11 +776,16 @@ for i in range(min_date_id, max_date_id + 1):
         working_df['match_type_weight']
     )
 
-    # Drop zero-weight rows and 0-margin regulation draws (shootout-decided
-    # 0-0 games have ±shootout_margin and stay in). Matches the prior rankit
-    # filter; the solver itself doesn't need this, but it keeps the network
-    # density definition consistent with the pre-port pipeline.
-    working_df = working_df[(working_df['weight'] > 0) & (working_df['adj_margin_home'] != 0)]
+    # Drop zero-weight rows only. We deliberately KEEP 0-margin draws: a draw
+    # between mismatched teams is strong signal (the WLS row rating_home -
+    # rating_away = adj_margin pulls them together). The old `adj_margin_home
+    # != 0` filter was a vestigial carryover from the pre-port rankit pipeline
+    # ("the solver itself doesn't need this") and it silently dropped every
+    # NEUTRAL-site regulation draw -- because neutral games get hfa=0, so a
+    # neutral draw is the only case where adj_margin_home lands exactly on 0.
+    # That ate ALL World Cup draws (WC venues are neutral), e.g. Spain 0-0 Cape
+    # Verde 2026-06-15 never entered the solve. Fixed 2026-06-18.
+    working_df = working_df[working_df['weight'] > 0]
     if len(working_df) < 10:
         continue
 
