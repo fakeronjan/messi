@@ -101,17 +101,16 @@ African Cup of Nations,2025,DR Congo,3
 African Cup of Nations,2026,Morocco,1
 African Cup of Nations,2026,Senegal,2
 African Cup of Nations,2026,Nigeria,3
-CONCACAF Nations League,2019,Barbados,1
-CONCACAF Nations League,2019,Cayman Islands,2
-CONCACAF Nations League,2019,Dominica,3
+CONCACAF Nations League,2019,Mexico,1
+CONCACAF Nations League,2019,Bermuda,2
 CONCACAF Nations League,2021,United States,1
 CONCACAF Nations League,2021,Mexico,2
 CONCACAF Nations League,2023,Saint Martin,1
 CONCACAF Nations League,2023,Bonaire,2
-CONCACAF Nations League,2023,Panama,3
+CONCACAF Nations League,2023,Montserrat,3
 CONCACAF Nations League,2024,Dominican Republic,1
 CONCACAF Nations League,2024,Bermuda,2
-CONCACAF Nations League,2024,Sint Maarten,3
+CONCACAF Nations League,2024,Curaçao,3
 CONCACAF Nations League,2025,Mexico,1
 CONCACAF Nations League,2025,Panama,2
 Copa América,1987,Uruguay,1
@@ -119,8 +118,8 @@ Copa América,1987,Chile,2
 Copa América,1987,Colombia,3
 Copa América,1989,Brazil,1
 Copa América,1989,Uruguay,2
-Copa América,1991,Argentina,1
-Copa América,1991,Colombia,2
+Copa América,1991,Brazil,1
+Copa América,1991,Chile,2
 Copa América,1993,Argentina,1
 Copa América,1993,Mexico,2
 Copa América,1993,Colombia,3
@@ -192,6 +191,9 @@ FIFA World Cup,2018,Belgium,3
 FIFA World Cup,2022,Argentina,1
 FIFA World Cup,2022,France,2
 FIFA World Cup,2022,Croatia,3
+FIFA World Cup,2026,Mexico,1
+FIFA World Cup,2026,South Korea,2
+FIFA World Cup,2026,Ghana,3
 Gold Cup,1991,United States,1
 Gold Cup,1991,Honduras,2
 Gold Cup,1993,Mexico,1
@@ -245,9 +247,8 @@ Oceania Nations Cup,2002,New Zealand,1
 Oceania Nations Cup,2002,Australia,2
 Oceania Nations Cup,2004,Australia,1
 Oceania Nations Cup,2004,Solomon Islands,2
-Oceania Nations Cup,2007,New Caledonia,1
-Oceania Nations Cup,2007,Fiji,2
-Oceania Nations Cup,2007,New Zealand,3
+Oceania Nations Cup,2007,New Zealand,1
+Oceania Nations Cup,2007,Vanuatu,2
 Oceania Nations Cup,2008,Fiji,1
 Oceania Nations Cup,2008,New Zealand,2
 Oceania Nations Cup,2012,Tahiti,1
@@ -281,13 +282,12 @@ UEFA Euro,2021,Italy,1
 UEFA Euro,2021,England,2
 UEFA Euro,2024,Spain,1
 UEFA Euro,2024,England,2
-UEFA Nations League,2018,Scotland,1
-UEFA Nations League,2018,Israel,2
-UEFA Nations League,2018,North Macedonia,3
+UEFA Nations League,2018,Kosovo,1
+UEFA Nations League,2018,Azerbaijan,2
 UEFA Nations League,2019,Portugal,1
 UEFA Nations League,2019,Netherlands,2
-UEFA Nations League,2020,Wales,1
-UEFA Nations League,2020,Finland,2
+UEFA Nations League,2020,Albania,1
+UEFA Nations League,2020,Belarus,2
 UEFA Nations League,2021,France,1
 UEFA Nations League,2021,Spain,2
 UEFA Nations League,2023,Spain,1
