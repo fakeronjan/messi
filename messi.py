@@ -125,6 +125,19 @@ PODIUM_TOURNAMENTS = [
     'FIFA Confederations Cup',    # discontinued 2017 but kept for historical podiums
 ]
 
+# Locked-in final dates for in-progress editions whose knockout fixtures are NOT
+# yet in the data feed (teams are TBD until the bracket fills, so the feed stops
+# at the group stage). An edition with an entry here is NOT crowned until its
+# final date has passed - the schedule alone can't prove it's over, since "no
+# future games loaded" is indistinguishable from "knockouts not yet scheduled".
+# This is what stops the podium bracket-walk from declaring a "champion" between
+# the group stage ending and the knockout dates populating. Add the current
+# major(s) each cycle; entries for concluded editions are harmless but prune for
+# tidiness. (2026 WC final: 2026-07-19, MetLife Stadium.)
+TOURNAMENT_END_DATES = {
+    ('FIFA World Cup', 2026): date(2026, 7, 19),
+}
+
 # Allowlist of legitimate competitive tournaments. Anything NOT in this list
 # (and not in U23_TOURNAMENTS below) is treated as a friendly and gets
 # friendly_weight applied to its WLS observation weight.
@@ -640,6 +653,24 @@ print("Master game CSV saved: all_soccer_games.csv")
 
 df['home_score_int'] = pd.to_numeric(df['home_score'], errors='coerce')
 df['away_score_int'] = pd.to_numeric(df['away_score'], errors='coerce')
+
+# In-progress editions: any (tournament, year) that still has games scheduled but
+# not yet played (NaN score, dated today or later) is ONGOING and must not be
+# crowned a podium. The source schedule carries future fixtures, so we capture
+# this here, BEFORE the dropna strips unplayed rows. Without it the podium
+# bracket-walk can spuriously declare a "final" mid-tournament (e.g. crowning a
+# World Cup champion during the group stage).
+_today_ts = pd.Timestamp(date.today())
+_unplayed = df[
+    (df['home_score_int'].isna() | df['away_score_int'].isna())
+    & (df['date'] >= _today_ts)
+]
+in_progress_editions = {
+    (t, int(y)) for t, y in zip(_unplayed['tournament'], _unplayed['date'].dt.year)
+}
+if in_progress_editions:
+    print(f"In-progress editions (podium suppressed): {sorted(in_progress_editions)}")
+
 df = df.dropna(subset=['home_score_int', 'away_score_int']).copy()
 df['home_score_int'] = df['home_score_int'].astype(int)
 df['away_score_int'] = df['away_score_int'].astype(int)
@@ -852,6 +883,17 @@ podium_df['year'] = podium_df['date'].dt.year
 podium_records = []
 
 for (tournament, year), group in podium_df.groupby(['tournament', 'year']):
+
+    # Don't crown a champion for a tournament that isn't over:
+    #   (a) it still has loaded fixtures left to play (group stage in progress), or
+    #   (b) it has a known final date we haven't reached yet (knockout fixtures
+    #       aren't in the feed until teams are set, so "no future games loaded"
+    #       does NOT mean the edition is finished).
+    if (tournament, int(year)) in in_progress_editions:
+        continue
+    _end_date = TOURNAMENT_END_DATES.get((tournament, int(year)))
+    if _end_date is not None and date.today() < _end_date:
+        continue
 
     group = group.sort_values('date')
     last_date = group['date'].max()
