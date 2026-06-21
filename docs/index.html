@@ -173,7 +173,9 @@
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     color: #1a6b8a;
+    text-align: center;
   }
+  thead th.col-num { text-align: center; }
   .rating-bar-wrap {
     display: flex;
     flex-direction: column;
@@ -855,8 +857,8 @@ function renderStandings() {
   document.getElementById('standings-table-wrap').innerHTML = `
     <table>
       <thead><tr>
-        <th>OVR #</th><th class="col-hide-mobile">Conf #</th>
-        <th>Country</th><th>Conf</th><th>Rating</th>
+        <th class="col-num">OVR #</th><th class="col-hide-mobile col-num">Conf #</th>
+        <th>Country</th><th>Conf</th><th class="col-num">Rating</th>
         <th>Last Match</th>
         <th class="col-hide-mobile">Date</th>
         <th class="col-hide-mobile">Honors</th>
@@ -1027,8 +1029,8 @@ function renderTeamTable() {
     <table>
       <thead><tr>
         <th style="text-align:center">Year</th><th>Date</th><th>Last Match</th>
-        <th>OVR #</th><th class="col-hide-mobile">Conf #</th>
-        <th>Rating</th>
+        <th class="col-num">OVR #</th><th class="col-hide-mobile col-num">Conf #</th>
+        <th class="col-num">Rating</th>
         <th class="col-hide-mobile">Conf</th>
         <th class="col-hide-mobile">Honors</th>
       </tr></thead>
@@ -1186,8 +1188,8 @@ function renderLeagueHistory(league) {
       : `<td class="${bg} team-cell" style="white-space:nowrap">${cellInner}</td>`;
     return `
       ${teamTd}
-      <td class="${bg} col-hide-mobile" style="font-variant-numeric:tabular-nums;white-space:nowrap;color:#888;font-size:0.85em">${ovrRank}</td>
-      <td class="${bg} col-hide-mobile" style="font-variant-numeric:tabular-nums;white-space:nowrap;color:#aaa;font-size:0.85em">${confRank}</td>
+      <td class="${bg} col-hide-mobile" style="font-variant-numeric:tabular-nums;white-space:nowrap;color:#888;font-size:0.85em;text-align:center">${ovrRank}</td>
+      <td class="${bg} col-hide-mobile" style="font-variant-numeric:tabular-nums;white-space:nowrap;color:#aaa;font-size:0.85em;text-align:center">${confRank}</td>
       <td class="${bg} rating-cell" style="font-variant-numeric:tabular-nums">${rating}</td>`;
   }
 
@@ -1225,17 +1227,17 @@ function renderLeagueHistory(league) {
       <thead><tr>
         <th>Year</th>
         <th class="col-champ">Champion</th>
-        <th class="col-champ col-hide-mobile">OVR #</th>
-        <th class="col-champ col-hide-mobile">Conf #</th>
-        <th class="col-champ">Rating</th>
+        <th class="col-champ col-hide-mobile col-num">OVR #</th>
+        <th class="col-champ col-hide-mobile col-num">Conf #</th>
+        <th class="col-champ col-num">Rating</th>
         <th class="col-ru">Runner-Up</th>
-        <th class="col-ru col-hide-mobile">OVR #</th>
-        <th class="col-ru col-hide-mobile">Conf #</th>
-        <th class="col-ru">Rating</th>
+        <th class="col-ru col-hide-mobile col-num">OVR #</th>
+        <th class="col-ru col-hide-mobile col-num">Conf #</th>
+        <th class="col-ru col-num">Rating</th>
         <th class="col-ru">3rd Place</th>
-        <th class="col-ru col-hide-mobile">OVR #</th>
-        <th class="col-ru col-hide-mobile">Conf #</th>
-        <th class="col-ru">Rating</th>
+        <th class="col-ru col-hide-mobile col-num">OVR #</th>
+        <th class="col-ru col-hide-mobile col-num">Conf #</th>
+        <th class="col-ru col-num">Rating</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
@@ -1287,7 +1289,7 @@ function renderGoat() {
         <th style="text-align:center">All time rank</th>
         <th style="text-align:center">Year</th>
         <th>Country</th><th>Conf</th>
-        <th>Rating</th>
+        <th class="col-num">Rating</th>
         <th class="col-hide-mobile">Honors</th>
       </tr></thead>
       <tbody>${rows}</tbody>
