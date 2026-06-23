@@ -276,6 +276,43 @@ for key in _country_year_finishes:
     _country_year_finishes[key].sort(key=lambda x: x['finish'])
 
 
+# Per-(country, year) → World Cup match record for that edition.
+# FIFA-official convention: a knockout game decided on penalties counts as a
+# DRAW (not a win/loss); the shootout outcome is tracked separately and surfaced
+# as a "(x-y pens)" annotation. Only the FIFA World Cup *finals* are counted -
+# 'FIFA World Cup qualification' is a distinct tournament label and excluded.
+# Names in all_soccer_games.csv are already the engine's canonical names (e.g.
+# West Germany editions fold into Germany), so keys match the team-doc identity.
+_wc_record = {}
+for _, g in games[games['tournament'] == 'FIFA World Cup'].iterrows():
+    if pd.isna(g['date']) or pd.isna(g['home_score']) or pd.isna(g['away_score']):
+        continue
+    yr = int(g['date'].year)
+    hs, as_ = int(g['home_score']), int(g['away_score'])
+    so = g.get('shootout_winner')
+    so = so if isinstance(so, str) and so.strip() else None
+    for team, gf, ga in ((g['home_team'], hs, as_), (g['away_team'], as_, hs)):
+        rec = _wc_record.setdefault((team, yr),
+            {'P': 0, 'W': 0, 'D': 0, 'L': 0, 'GF': 0, 'GA': 0, 'pens_w': 0, 'pens_l': 0})
+        rec['P'] += 1
+        rec['GF'] += gf
+        rec['GA'] += ga
+        if gf > ga:
+            rec['W'] += 1
+        elif gf < ga:
+            rec['L'] += 1
+        else:
+            rec['D'] += 1  # level after regulation/ET -> draw (PSO does not change W-D-L)
+            if so is not None:
+                rec['pens_w' if so == team else 'pens_l'] += 1
+
+
+def wc_record(country, year):
+    if pd.isna(year):
+        return None
+    return _wc_record.get((country, int(year)))
+
+
 def country_year_finishes(country, year):
     if pd.isna(year):
         return []
@@ -590,6 +627,7 @@ for team in all_teams:
             continue  # skip ghost year - team played 0 games
         finishes_for_year = country_year_finishes(team, season)
         won_continental = (team, int(season)) in _continental_winners
+        _wc_rec_year = wc_record(team, season)
         rows = []
         for _, r in sdf.sort_values('date').iterrows():
             row = {
@@ -608,6 +646,10 @@ for team in all_teams:
             era = display_name_at(team, r['date'])
             if era and era != team:
                 row['display_name'] = era
+            # Attach the edition's match record to the World Cup anchor row only
+            # (the row the Team Summary "FIFA World Cup" view filters to).
+            if _wc_rec_year and row['year_anchor_label'] == 'End of FIFA World Cup':
+                row['wc_record'] = _wc_rec_year
             rows.append(row)
         seasons[int(season)] = rows
 

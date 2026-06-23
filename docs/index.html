@@ -963,6 +963,15 @@ async function loadTeam(slug) {
   renderTeamTable();
 }
 
+// World Cup match record (W-D-L). PSO games count as draws (FIFA-official);
+// any shootouts are annotated separately. Shown only in the World Cup view.
+function fmtWcRecord(r) {
+  if (!r) return '<span style="color:#bbb">-</span>';
+  const pens = (r.pens_w + r.pens_l)
+    ? ` <span style="color:#999;font-size:10px">(${r.pens_w}-${r.pens_l} pens)</span>` : '';
+  return `<span style="font-weight:700;font-variant-numeric:tabular-nums" title="Played ${r.P}, GF ${r.GF}, GA ${r.GA}">${r.W}-${r.D}-${r.L}</span>${pens}`;
+}
+
 function renderTeamTable() {
   const slug = document.getElementById('team-select').value;
   if (!slug || !teamCache[slug]) return;
@@ -1035,6 +1044,7 @@ function renderTeamTable() {
     <td class="linked" data-season-link="${g.season}" data-target-conf="${targetConf}" style="font-size:11px;color:#555;text-align:center">${seasonCell}</td>
     <td style="white-space:nowrap;color:#888;font-size:12px">${dateCell}</td>
     <td class="last-match-cell">${renderLastMatch(g.last_match, g.season, !!g._isStale)}</td>
+    ${tsView === 'worldcup' ? `<td class="col-num" style="text-align:center;font-size:12px">${fmtWcRecord(g.wc_record)}</td>` : ''}
     <td class="rank-cell">${g.rank}</td>
     <td class="rank-cell col-hide-mobile">${g.conf_rank != null ? g.conf_rank : '-'}</td>
     <td>${ratingBar(g.rating, _bs1)}</td>
@@ -1047,6 +1057,7 @@ function renderTeamTable() {
     <table>
       <thead><tr>
         <th style="text-align:center">Year</th><th>Date</th><th>Last Match</th>
+        ${tsView === 'worldcup' ? '<th class="col-num">WC Record</th>' : ''}
         <th class="col-num">OVR #</th><th class="col-hide-mobile col-num">Conf #</th>
         <th class="col-num">Rating</th>
         <th class="col-hide-mobile">Conf</th>
