@@ -290,32 +290,51 @@ for _, g in games[games['tournament'] == 'FIFA World Cup'].iterrows():
         continue
     yr = int(g['date'].year)
     hs, as_ = int(g['home_score']), int(g['away_score'])
+    neutral = bool(g.get('neutral'))
     so = g.get('shootout_winner')
     so = so if isinstance(so, str) and so.strip() else None
     _wc_team_games.setdefault((g['home_team'], yr), []).append(
-        (g['date'], hs, as_, so == g['home_team'], so is not None))
+        {'date': g['date'], 'gf': hs, 'ga': as_, 'opp': g['away_team'],
+         'home': True, 'neutral': neutral, 'won_so': so == g['home_team'], 'is_so': so is not None})
     _wc_team_games.setdefault((g['away_team'], yr), []).append(
-        (g['date'], as_, hs, so == g['away_team'], so is not None))
+        {'date': g['date'], 'gf': as_, 'ga': hs, 'opp': g['home_team'],
+         'home': False, 'neutral': neutral, 'won_so': so == g['away_team'], 'is_so': so is not None})
 
+# rec carries the split record plus 'matches': every WC game that edition as a
+# "W 2-1 vs. (N) France"-style string (same format as last_match, minus the
+# competition suffix), in date order, for the per-edition match list cell.
+# Knockout pens wins/losses are tracked separately (pens_w/pens_l) so the
+# frontend can fold them into the knockout W-L and still annotate the shootouts.
 _wc_record = {}
 for (team, yr), gl in _wc_team_games.items():
-    gl.sort(key=lambda x: x[0])
+    gl.sort(key=lambda m: m['date'])
     rec = {'g_w': 0, 'g_d': 0, 'g_l': 0, 'g_pts': 0, 'k_w': 0, 'k_l': 0, 'pens_w': 0, 'pens_l': 0}
-    for i, (d, gf, ga, won_so, is_so) in enumerate(gl):
-        if i < 3:  # group stage
+    matches = []
+    for i, m in enumerate(gl):
+        gf, ga = m['gf'], m['ga']
+        if gf > ga or (gf == ga and m['won_so']):
+            letter = 'W'
+        elif gf < ga or (gf == ga and m['is_so']):
+            letter = 'L'
+        else:
+            letter = 'D'
+        venue = ' vs. (N) ' if m['neutral'] else (' vs. ' if m['home'] else ' @ ')
+        matches.append(f"{letter} {gf}-{ga}{venue}{m['opp']}")
+        if i < 3:  # group stage: W-D-L on the scoreboard
             if gf > ga:
                 rec['g_w'] += 1
             elif gf < ga:
                 rec['g_l'] += 1
             else:
                 rec['g_d'] += 1
-        elif is_so:  # knockout decided on penalties
-            rec['pens_w' if won_so else 'pens_l'] += 1
+        elif m['is_so']:  # knockout decided on penalties
+            rec['pens_w' if m['won_so'] else 'pens_l'] += 1
         elif gf > ga:  # knockout decided in regulation/ET
             rec['k_w'] += 1
         elif gf < ga:
             rec['k_l'] += 1
     rec['g_pts'] = 3 * rec['g_w'] + rec['g_d']
+    rec['matches'] = matches
     _wc_record[(team, yr)] = rec
 
 
