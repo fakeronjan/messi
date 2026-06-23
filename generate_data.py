@@ -348,7 +348,7 @@ for (team, yr), gl in _wc_team_games.items():
             letter = 'D'
         venue = ' vs. (N) ' if m['neutral'] else (' vs. ' if m['home'] else ' @ ')
         _st = opp_standing(m['opp'], m['date'])
-        matches.append({'s': f"{letter} {gf}-{ga}{venue}{m['opp']}",
+        matches.append({'s': f"{letter} {gf}-{ga}{venue}{display_name_at(m['opp'], m['date']) or m['opp']}",
                         'r': _st[0] if _st else None,
                         'g': _st[1] if _st else None})
         if i < 3:  # group stage: W-D-L on the scoreboard
