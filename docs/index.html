@@ -1070,7 +1070,7 @@ function renderTeamTable() {
     <td class="linked" data-season-link="${g.season}" data-target-conf="${targetConf}" style="font-size:11px;color:#555;text-align:center">${seasonCell}</td>
     <td style="white-space:nowrap;color:#888;font-size:12px">${dateCell}</td>
     ${tsView === 'worldcup'
-      ? `<td class="last-match-cell" style="white-space:normal">${((g.wc_record && g.wc_record.matches) || []).slice().reverse().map(mm => `<div>${renderLastMatch(mm, g.season, false)}</div>`).join('')}</td>`
+      ? `<td class="last-match-cell" style="white-space:normal">${((g.wc_record && g.wc_record.matches) || []).slice().reverse().map(mm => { const opp = (mm.r != null) ? ` <span style="color:#999;font-size:0.85em">(#${mm.r}, ${mm.g.toFixed(2)})</span>` : ''; return `<div>${renderLastMatch(mm.s, g.season, false)}${opp}</div>`; }).join('')}</td>`
       : `<td class="last-match-cell">${renderLastMatch(g.last_match, g.season, !!g._isStale)}</td>`}
     ${tsView === 'worldcup' ? `<td style="font-variant-numeric:tabular-nums;white-space:nowrap">${fmtWcRecord(g.wc_record, g.tournament_finishes)}</td>` : ''}
     <td class="rank-cell">${g.rank}</td>

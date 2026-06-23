@@ -284,6 +284,33 @@ for key in _country_year_finishes:
 # decided in regulation/ET go into the knockout W-L. Only the FIFA World Cup
 # *finals* count - 'FIFA World Cup qualification' is a distinct label, excluded.
 # Names in all_soccer_games.csv are canonical (West Germany folds into Germany).
+#
+# Opponent-strength annotation: each match line also carries the opponent's
+# rank/rating as they stood going INTO that match (latest snapshot strictly
+# before the match date), so the matches column reads e.g.
+# "W 2-1 vs. France (#4, 2.70)".
+from bisect import bisect_left
+_team_snaps = {}
+for _country, _sub in df[['country', 'date', 'rank', 'rating']].dropna(subset=['date']).groupby('country'):
+    _sub = _sub.sort_values('date')
+    _team_snaps[_country] = (list(_sub['date']), list(_sub['rank']), list(_sub['rating']))
+
+
+def opp_standing(opp, match_date):
+    """Opponent (rank, rating) as of just before match_date; None if unknown."""
+    snap = _team_snaps.get(opp)
+    if not snap:
+        return None
+    dates, ranks, ratings = snap
+    i = bisect_left(dates, match_date)
+    if i == 0:
+        return None
+    rk, rt = ranks[i - 1], ratings[i - 1]
+    if pd.isna(rk) or pd.isna(rt):
+        return None
+    return int(rk), round(float(rt), 2)
+
+
 _wc_team_games = {}
 for _, g in games[games['tournament'] == 'FIFA World Cup'].iterrows():
     if pd.isna(g['date']) or pd.isna(g['home_score']) or pd.isna(g['away_score']):
@@ -301,10 +328,11 @@ for _, g in games[games['tournament'] == 'FIFA World Cup'].iterrows():
          'home': False, 'neutral': neutral, 'won_so': so == g['away_team'], 'is_so': so is not None})
 
 # rec carries the split record plus 'matches': every WC game that edition as a
-# "W 2-1 vs. (N) France"-style string (same format as last_match, minus the
-# competition suffix), in date order, for the per-edition match list cell.
-# Knockout pens wins/losses are tracked separately (pens_w/pens_l) so the
-# frontend can fold them into the knockout W-L and still annotate the shootouts.
+# {s, r, g} object - s is a "W 2-1 vs. (N) France"-style string (last_match
+# format minus the competition suffix), r/g the opponent's pre-match rank and
+# rating - in date order, for the per-edition match list cell. Knockout pens
+# wins/losses are tracked separately (pens_w/pens_l) so the frontend can fold
+# them into the knockout W-L and still annotate the shootouts.
 _wc_record = {}
 for (team, yr), gl in _wc_team_games.items():
     gl.sort(key=lambda m: m['date'])
@@ -319,7 +347,10 @@ for (team, yr), gl in _wc_team_games.items():
         else:
             letter = 'D'
         venue = ' vs. (N) ' if m['neutral'] else (' vs. ' if m['home'] else ' @ ')
-        matches.append(f"{letter} {gf}-{ga}{venue}{m['opp']}")
+        _st = opp_standing(m['opp'], m['date'])
+        matches.append({'s': f"{letter} {gf}-{ga}{venue}{m['opp']}",
+                        'r': _st[0] if _st else None,
+                        'g': _st[1] if _st else None})
         if i < 3:  # group stage: W-D-L on the scoreboard
             if gf > ga:
                 rec['g_w'] += 1
