@@ -466,7 +466,7 @@ let nameToSlug        = {};  // country name → slug, built from teamsIndex
 let standingsConf  = 'all';
 let tsConf         = 'all';
 let goatConf       = 'all';
-let tsView         = 'cross';  // 'cross' (all-season summary) or 'single' (one season, all game-days)
+let tsView         = 'cross';  // 'cross' (all-season summary), 'single' (one season, all game-days), or 'worldcup' (end-of-WC snapshot per World Cup)
 let historyTourny  = 'FIFA World Cup';
 
 const CONF_OPTIONS = [
@@ -624,8 +624,9 @@ async function teamLinkClick(slug, season) {
   const wantSingle = season != null && season !== '';
   tsView = wantSingle ? 'single' : 'cross';
   buildPillsFromOpts('ts-view-pills', [
-    { value: 'cross',  label: 'All season summary' },
-    { value: 'single', label: 'All games within one season' },
+    { value: 'cross',    label: 'All season summary' },
+    { value: 'single',   label: 'All games within one season' },
+    { value: 'worldcup', label: 'FIFA World Cup' },
   ], tsView, v => {
     tsView = v;
     document.getElementById('season-select').style.display   = (v === 'single') ? '' : 'none';
@@ -919,8 +920,9 @@ buildConfPills('ts-conf-pills', true, tsConf, v => {
   document.getElementById('season-select').innerHTML = '';
 });
 buildPillsFromOpts('ts-view-pills', [
-  { value: 'cross',  label: 'All season summary' },
-  { value: 'single', label: 'All games within one season' },
+  { value: 'cross',    label: 'All season summary' },
+  { value: 'single',   label: 'All games within one season' },
+  { value: 'worldcup', label: 'FIFA World Cup' },
 ], tsView, v => {
   tsView = v;
   document.getElementById('season-select').style.display   = (v === 'single') ? '' : 'none';
@@ -982,6 +984,22 @@ function renderTeamTable() {
         prevLastMatch = g.last_match;
       });
     });
+  } else if (tsView === 'worldcup') {
+    // World Cup view: one snapshot per World Cup - the country's rating as of
+    // the end of that tournament. WC is always the year anchor in its year,
+    // so its snapshot is uniquely labelled 'End of FIFA World Cup'.
+    seasonFilter = 'all';
+    seasons.forEach(s => {
+      data.seasons[s].forEach(g => {
+        if (g.year_anchor_label === 'End of FIFA World Cup') rows.push({...g, season: s});
+      });
+    });
+    if (rows.length === 0) {
+      document.getElementById('chart-wrap').style.display = 'none';
+      document.getElementById('team-table-wrap').innerHTML =
+        '<p class="loading">No FIFA World Cup appearances in the rating era (1986–).</p>';
+      return;
+    }
   } else {
     // Cross-year summary view: one snapshot per year - the team's "year anchor"
     // (most prestigious tournament they played in that year, or end-of-year fallback).
