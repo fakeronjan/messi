@@ -801,7 +801,7 @@ async function loadSeason(season) {
     selectSnapshot(defaultDate);
   } catch(e) {
     document.getElementById('standings-table-wrap').innerHTML =
-      `<p class="error">Could not load data.</p>`;
+      `<p class="error">Could not load standings.</p>`;
   }
 }
 
@@ -997,7 +997,7 @@ function renderTeamTable() {
     if (rows.length === 0) {
       document.getElementById('chart-wrap').style.display = 'none';
       document.getElementById('team-table-wrap').innerHTML =
-        '<p class="loading">No FIFA World Cup appearances in the rating era (1986–).</p>';
+        '<p class="loading">No FIFA World Cup appearances since 1986.</p>';
       return;
     }
   } else {

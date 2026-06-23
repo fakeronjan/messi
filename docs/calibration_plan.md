@@ -6,7 +6,7 @@ _Shipped to `messi.py` on branch `confed-calibration`, 2026-06-07._
 
 MESSI's **within-confederation** ordering was always solid, but the
 **between-confederation level** was unstable. The match graph is six dense
-confederation clusters joined by thin bridges — and those bridges are mostly
+confederation clusters joined by thin bridges - and those bridges are mostly
 friendlies (down-weighted to 0.25), because competitive games are almost all
 intra-confederation. The World Cup (the only heavily-weighted cross-confed
 competition) falls outside the 200-game-day window for most of each 4-year
@@ -15,27 +15,27 @@ friendlies.
 
 Symptom: on 2026-03-26, two friendlies (Brazil 1-2 France, Colombia 1-2
 Croatia) entered the window and floated the **entire UEFA bloc up ~1.2 rating
-points in a day** — Norway went #5 → #2 without playing. Historically, the
+points in a day** - Norway went #5 → #2 without playing. Historically, the
 model's true #1 was a sub-5-competitive-game phantom on 41% of game-days
 (e.g. Israel 1998, ahead of champion France).
 
-## The fix — a confed ↔ team iterative calibration
+## The fix - a confed ↔ team iterative calibration
 
 Two diseases, two tools, composed as one iterative solve:
 
-- **Layer 2 — slow confed offset.** Treat each confederation as a single
+- **Layer 2 - slow confed offset.** Treat each confederation as a single
   "super-team" and solve the cross-confed games over an 8-year, recency-weighted
   (3yr half-life) window. Produces one calibrated level per confederation.
-  Pure function of games — no cache dependency. (`_confed_offset`)
+  Pure function of games - no cache dependency. (`_confed_offset`)
 
-- **Layer 1 — partial pooling.** In the global WLS, add one prior row per team
+- **Layer 1 - partial pooling.** In the global WLS, add one prior row per team
   pulling its rating toward *its confederation's level* (Layer 2), with weight
   `confed_prior_lambda`. Thin-evidence teams get dragged to "average team in
   their confederation" (kills the Israel/Australia phantoms at the root);
   well-observed teams override the prior and keep their earned rating.
   (`_solve_wls`, prior rows)
 
-- **Layer 3 — anchored re-estimation.** After solving, re-estimate each
+- **Layer 3 - anchored re-estimation.** After solving, re-estimate each
   confederation's level from the solved bloc means, but **blended back toward
   the slow Layer-2 offset** (`recenter_anchor_alpha`). Feed that as the prior
   for the next pass. Iterate a fixed `calibration_iters` (K=3) times.
@@ -66,7 +66,7 @@ preserved (a team can still rise on merit); only the bloc *level* is stabilized.
 
 Unchanged & locked: `window_game_days=200`, `margin_cap=8`, `home_field_adv=0.5`,
 `min_competitive_games=5` (now a clean editorial floor, no longer the primary
-anti-phantom defense — ridge handles that; the floor still catches the
+anti-phantom defense - ridge handles that; the floor still catches the
 1-game tail like Guyana-1998).
 
 ## Validation (offline prototype + engine-function test, 2026-06-07)
@@ -74,10 +74,10 @@ anti-phantom defense — ridge handles that; the floor still catches the
 - World Cup champion backtest: **5/7 at #1, 7/7 top-3** (was robust before; held).
 - Israel-1998 phantom: #1 → **#8** (France correctly #1). Australia-2006: → **#13**.
 - March-2026 UEFA bloc lurch: **+1.10 → +0.10**. Norway: stable **#1 / #2 / #1**
-  across Feb/Mar/Jun — bold but earned and smooth, not a spike.
+  across Feb/Mar/Jun - bold but earned and smooth, not a spike.
 - GOAT list: canonical greats survive (Germany '14, Brazil '02, Spain '12,
   Argentina '16/'22), top-20 spread slightly *wider* than production (no
-  compression-into-mush — the failure mode that sank the 400-day window test).
+  compression-into-mush - the failure mode that sank the 400-day window test).
 
 ## Caveats / downstream
 
@@ -85,7 +85,7 @@ anti-phantom defense — ridge handles that; the floor still catches the
   (it checks id↔date mapping, not formula). `messi_ratings.csv.gz` and
   `messi_ratings_final.csv.gz` **must be deleted** before rebuilding, or it
   serves stale old-formula ratings.
-- **Rebuild:** full, from-scratch, **foreground/serial** (never parallel — see
+- **Rebuild:** full, from-scratch, **foreground/serial** (never parallel - see
   the rebuild-hang lesson). Per-snapshot cost is ~K× the old solve; the slow
   offset is recomputed once per calendar month to keep it tractable.
 - **Rating scale compresses** (top team ~2.6 vs ~4.7 before). Audit the header
@@ -93,7 +93,7 @@ anti-phantom defense — ridge handles that; the floor still catches the
   UI; the JSON column schema is unchanged, only the values move.
 - **Rollout:** this closes the original Alpha reason (Israel-98) at the root
   plus the deeper lurch. Combined with live WC 2026 cross-confed data, it's the
-  natural Alpha → Beta trigger — gate promotion on WC behaving sanely under the
+  natural Alpha → Beta trigger - gate promotion on WC behaving sanely under the
   new calibration, not just the backtest.
 
 ---
@@ -102,7 +102,7 @@ anti-phantom defense — ridge handles that; the floor still catches the
 
 The first cut (200 game-day window, λ=2) shipped, then surfaced a real flaw:
 **idle elites collapsed during pre-tournament friendly lulls.** Argentina fell
-#7 → #19 with no loss — its competitive pedigree (2024 Copa, 2025 qualifiers)
+#7 → #19 with no loss - its competitive pedigree (2024 Copa, 2025 qualifiers)
 aged out of the 200-day window, leaving only weak friendlies, and λ=2 partial
 pooling then over-shrank it toward the confed mean. No single λ fixed both the
 lurch and the collapse (they trade off monotonically), so the window was the
@@ -125,18 +125,18 @@ right lever.
   UEFA / 9 CONMEBOL. Scale shifted up (top ~3.5, peaks ~4.0) → UI bar ±4 → ±5,
   tiers → ~2 / ~2.7 / ~3.5 (Germany 2014 = 3.73).
 
-### Deferred — next iteration: quality-adjusted confed offset
+### Deferred - next iteration: quality-adjusted confed offset
 
 The one residual is **Brazil 1997 at GOAT #1** (a Copa winner over WC-champion
 Germany 2014). Probed and traced to **Layer 2**: CONMEBOL's offset (+0.82, above
-UEFA) is created **entirely by Argentina & Brazil** — remove their cross-confed
+UEFA) is created **entirely by Argentina & Brazil** - remove their cross-confed
 games and CONMEBOL drops to +0.54, *below* UEFA's +0.86; their direct H2H vs
 UEFA is +0.97 with Arg/Bra but −0.14 without. The super-team solve reads the two
 giants' quality as the whole confederation's level, then partial pooling stamps
 it onto every CONMEBOL team. **Cheap fixes don't work** (a per-team weight cap
-moves the level *unpredictably* — the zero-sum super-team solve is too
+moves the level *unpredictably* - the zero-sum super-team solve is too
 sensitive). The proper fix is a **quality-adjusted offset**: attribute a
 cross-confed result to the participating teams' own strength first and only the
-*residual* to the confederation — a joint/iterative estimation (circular with
+*residual* to the confederation - a joint/iterative estimation (circular with
 the within-confed ratings), deserving its own design + validation pass. Brazil
 1997 #1 is a defensible interim (a 37-8-2 Copa-winning Ronaldo/Romário dynasty).
