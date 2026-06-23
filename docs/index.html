@@ -974,14 +974,25 @@ function fmtRecord(rec) {
   return `${rec} <span style="color:#888;font-size:0.85em">(${pts})</span>`;
 }
 
-// World Cup edition record: W-D-L (Pts) on top, shootout record below in
-// dimmed smaller type. Mirrors COBI's fmtRecordStacked (regular/playoff).
-// PSO games count as draws (FIFA-official); the pens line surfaces separately.
-function fmtWcRecord(r) {
+// World Cup finish medal (top line of the record column): 👑 WC gold,
+// 🥈 runner-up, 🥉 third. Mirrors finishBadge's glyphs.
+function wcMedal(finishes) {
+  const wc = (finishes || []).find(x => x.tournament === 'WC');
+  if (!wc) return '';
+  const e = wc.finish === 1 ? '👑' : wc.finish === 2 ? '🥈' : wc.finish === 3 ? '🥉' : '';
+  return e ? ` ${e}` : '';
+}
+
+// World Cup edition record, stacked like COBI's regular/playoff cell:
+//   top   = GROUP stage W-D-L (Pts), with the finish medal appended
+//   bottom = KNOCKOUT W-L, with shootout record in parens when relevant
+// Knockout line is omitted for teams eliminated in the group stage.
+function fmtWcRecord(r, finishes) {
   if (!r) return '0-0-0';
-  const top = fmtRecord(`${r.W}-${r.D}-${r.L}`);
-  if (!(r.pens_w + r.pens_l)) return top;
-  return `${top}<div style="font-size:10px;color:#888;font-weight:400;line-height:1.2">${r.pens_w}-${r.pens_l} pens</div>`;
+  const top = `${fmtRecord(`${r.g_w}-${r.g_d}-${r.g_l}`)}${wcMedal(finishes)}`;
+  if (!(r.k_w + r.k_l + r.pens_w + r.pens_l)) return top;
+  const pens = (r.pens_w + r.pens_l) ? ` (${r.pens_w}-${r.pens_l} pens)` : '';
+  return `${top}<div style="font-size:10px;color:#888;font-weight:400;line-height:1.2">${r.k_w}-${r.k_l}${pens}</div>`;
 }
 
 function renderTeamTable() {
@@ -1056,12 +1067,12 @@ function renderTeamTable() {
     <td class="linked" data-season-link="${g.season}" data-target-conf="${targetConf}" style="font-size:11px;color:#555;text-align:center">${seasonCell}</td>
     <td style="white-space:nowrap;color:#888;font-size:12px">${dateCell}</td>
     <td class="last-match-cell">${renderLastMatch(g.last_match, g.season, !!g._isStale)}</td>
-    ${tsView === 'worldcup' ? `<td style="font-variant-numeric:tabular-nums;white-space:nowrap">${fmtWcRecord(g.wc_record)}</td>` : ''}
+    ${tsView === 'worldcup' ? `<td style="font-variant-numeric:tabular-nums;white-space:nowrap">${fmtWcRecord(g.wc_record, g.tournament_finishes)}</td>` : ''}
     <td class="rank-cell">${g.rank}</td>
     <td class="rank-cell col-hide-mobile">${g.conf_rank != null ? g.conf_rank : '-'}</td>
     <td>${ratingBar(g.rating, _bs1)}</td>
     <td class="col-hide-mobile" style="font-size:11px">${confBadge(data.confederation, g.continental_winner)}</td>
-    <td class="col-hide-mobile" style="font-size:11px">${finishBadge(g.tournament_finishes)}</td>
+    ${tsView === 'worldcup' ? '' : `<td class="col-hide-mobile" style="font-size:11px">${finishBadge(g.tournament_finishes)}</td>`}
   </tr>`;
   }).join('');
 
@@ -1069,11 +1080,11 @@ function renderTeamTable() {
     <table>
       <thead><tr>
         <th style="text-align:center">Year</th><th>Date</th><th>Last Match</th>
-        ${tsView === 'worldcup' ? '<th>W-D-L (Pts)</th>' : ''}
+        ${tsView === 'worldcup' ? '<th>Group / KO</th>' : ''}
         <th class="col-num">OVR #</th><th class="col-hide-mobile col-num">Conf #</th>
         <th class="col-num">Rating</th>
         <th class="col-hide-mobile">Conf</th>
-        <th class="col-hide-mobile">Honors</th>
+        ${tsView === 'worldcup' ? '' : '<th class="col-hide-mobile">Honors</th>'}
       </tr></thead>
       <tbody>${tableRows}</tbody>
     </table>`;

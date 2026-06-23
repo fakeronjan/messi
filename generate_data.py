@@ -276,14 +276,15 @@ for key in _country_year_finishes:
     _country_year_finishes[key].sort(key=lambda x: x['finish'])
 
 
-# Per-(country, year) → World Cup match record for that edition.
-# FIFA-official convention: a knockout game decided on penalties counts as a
-# DRAW (not a win/loss); the shootout outcome is tracked separately and surfaced
-# as a "(x-y pens)" annotation. Only the FIFA World Cup *finals* are counted -
-# 'FIFA World Cup qualification' is a distinct tournament label and excluded.
-# Names in all_soccer_games.csv are already the engine's canonical names (e.g.
-# West Germany editions fold into Germany), so keys match the team-doc identity.
-_wc_record = {}
+# Per-(country, year) → World Cup record, SPLIT into group stage and knockout.
+# Each team's FIRST 3 games of an edition are the group stage (true for every
+# format 1986-2026+, including the 2026 expansion to a Round of 32); everything
+# after is knockout. Group games use W-D-L (+points = 3W+D). Knockout has no
+# draws: a game level after extra time goes into the separate pens W-L; games
+# decided in regulation/ET go into the knockout W-L. Only the FIFA World Cup
+# *finals* count - 'FIFA World Cup qualification' is a distinct label, excluded.
+# Names in all_soccer_games.csv are canonical (West Germany folds into Germany).
+_wc_team_games = {}
 for _, g in games[games['tournament'] == 'FIFA World Cup'].iterrows():
     if pd.isna(g['date']) or pd.isna(g['home_score']) or pd.isna(g['away_score']):
         continue
@@ -291,20 +292,31 @@ for _, g in games[games['tournament'] == 'FIFA World Cup'].iterrows():
     hs, as_ = int(g['home_score']), int(g['away_score'])
     so = g.get('shootout_winner')
     so = so if isinstance(so, str) and so.strip() else None
-    for team, gf, ga in ((g['home_team'], hs, as_), (g['away_team'], as_, hs)):
-        rec = _wc_record.setdefault((team, yr),
-            {'P': 0, 'W': 0, 'D': 0, 'L': 0, 'GF': 0, 'GA': 0, 'pens_w': 0, 'pens_l': 0})
-        rec['P'] += 1
-        rec['GF'] += gf
-        rec['GA'] += ga
-        if gf > ga:
-            rec['W'] += 1
+    _wc_team_games.setdefault((g['home_team'], yr), []).append(
+        (g['date'], hs, as_, so == g['home_team'], so is not None))
+    _wc_team_games.setdefault((g['away_team'], yr), []).append(
+        (g['date'], as_, hs, so == g['away_team'], so is not None))
+
+_wc_record = {}
+for (team, yr), gl in _wc_team_games.items():
+    gl.sort(key=lambda x: x[0])
+    rec = {'g_w': 0, 'g_d': 0, 'g_l': 0, 'g_pts': 0, 'k_w': 0, 'k_l': 0, 'pens_w': 0, 'pens_l': 0}
+    for i, (d, gf, ga, won_so, is_so) in enumerate(gl):
+        if i < 3:  # group stage
+            if gf > ga:
+                rec['g_w'] += 1
+            elif gf < ga:
+                rec['g_l'] += 1
+            else:
+                rec['g_d'] += 1
+        elif is_so:  # knockout decided on penalties
+            rec['pens_w' if won_so else 'pens_l'] += 1
+        elif gf > ga:  # knockout decided in regulation/ET
+            rec['k_w'] += 1
         elif gf < ga:
-            rec['L'] += 1
-        else:
-            rec['D'] += 1  # level after regulation/ET -> draw (PSO does not change W-D-L)
-            if so is not None:
-                rec['pens_w' if so == team else 'pens_l'] += 1
+            rec['k_l'] += 1
+    rec['g_pts'] = 3 * rec['g_w'] + rec['g_d']
+    _wc_record[(team, yr)] = rec
 
 
 def wc_record(country, year):
