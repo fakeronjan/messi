@@ -625,7 +625,7 @@ async function teamLinkClick(slug, season) {
   tsView = wantSingle ? 'single' : 'cross';
   buildPillsFromOpts('ts-view-pills', [
     { value: 'cross',    label: 'Yearly summary' },
-    { value: 'single',   label: 'All games within one year' },
+    { value: 'single',   label: 'All matches within one year' },
     { value: 'worldcup', label: 'FIFA World Cup' },
   ], tsView, v => {
     tsView = v;
@@ -921,7 +921,7 @@ buildConfPills('ts-conf-pills', true, tsConf, v => {
 });
 buildPillsFromOpts('ts-view-pills', [
   { value: 'cross',    label: 'Yearly summary' },
-  { value: 'single',   label: 'All games within one year' },
+  { value: 'single',   label: 'All matches within one year' },
   { value: 'worldcup', label: 'FIFA World Cup' },
 ], tsView, v => {
   tsView = v;
@@ -1070,7 +1070,7 @@ function renderTeamTable() {
     <td class="linked" data-season-link="${g.season}" data-target-conf="${targetConf}" style="font-size:11px;color:#555;text-align:center">${seasonCell}</td>
     <td style="white-space:nowrap;color:#888;font-size:12px">${dateCell}</td>
     ${tsView === 'worldcup'
-      ? `<td class="last-match-cell" style="white-space:normal">${((g.wc_record && g.wc_record.matches) || []).slice().reverse().map(mm => { const opp = (mm.r != null) ? ` <span style="color:#999;font-size:0.85em">(#${mm.r}, ${mm.g.toFixed(2)})</span>` : ''; return `<div>${renderLastMatch(mm.s, g.season, false)}${opp}</div>`; }).join('')}</td>`
+      ? `<td class="last-match-cell" style="white-space:normal">${((g.wc_record && g.wc_record.matches) || []).slice().reverse().map(mm => { const opp = (mm.r != null) ? ` <span style="color:#999;font-size:0.85em">#${mm.r} · ${mm.g.toFixed(2)}</span>` : ''; return `<div>${renderLastMatch(mm.s, g.season, false)}${opp}</div>`; }).join('')}</td>`
       : `<td class="last-match-cell">${renderLastMatch(g.last_match, g.season, !!g._isStale)}</td>`}
     ${tsView === 'worldcup' ? `<td style="font-variant-numeric:tabular-nums;white-space:nowrap">${fmtWcRecord(g.wc_record, g.tournament_finishes)}</td>` : ''}
     <td class="rank-cell">${g.rank}</td>
@@ -1084,7 +1084,7 @@ function renderTeamTable() {
   document.getElementById('team-table-wrap').innerHTML = `
     <table>
       <thead><tr>
-        <th style="text-align:center">Year</th><th>Date</th><th>${tsView === 'worldcup' ? 'Matches' : 'Last Match'}</th>
+        <th style="text-align:center">Year</th><th>Date</th><th>${tsView === 'worldcup' ? 'Matches<div style="font-weight:400;font-size:0.82em;opacity:0.7;line-height:1.3;margin-top:1px">opponent rank · rating prior to match</div>' : 'Last Match'}</th>
         ${tsView === 'worldcup' ? '<th>Group W-D-L <span style="font-weight:400;font-size:0.85em;opacity:0.7">(Pts)</span><div style="font-weight:400;font-size:0.82em;opacity:0.7;line-height:1.3;margin-top:1px">Knockout W-L (Pen W-L)</div></th>' : ''}
         <th class="col-num">OVR #</th><th class="col-hide-mobile col-num">Conf #</th>
         <th class="col-num">Rating</th>
