@@ -677,11 +677,20 @@ for team in all_teams:
             era = display_name_at(team, r['date'])
             if era and era != team:
                 row['display_name'] = era
-            # Attach the edition's match record to the World Cup anchor row only
-            # (the row the Team Summary "FIFA World Cup" view filters to).
-            if _wc_rec_year and row['year_anchor_label'] == 'End of FIFA World Cup':
-                row['wc_record'] = _wc_rec_year
             rows.append(row)
+        # Attach the edition's World Cup record (the row the WC view filters on).
+        # Completed editions: to the 'End of FIFA World Cup' anchor. In-progress
+        # editions (live tournament, no anchor yet): to the LATEST snapshot, so
+        # the row shows the current rating + record-so-far. The finish medal keys
+        # off tournament_finishes, so an in-progress edition correctly shows none.
+        if _wc_rec_year and rows:
+            anchors = [row for row in rows if row['year_anchor_label'] == 'End of FIFA World Cup']
+            if anchors:
+                for row in anchors:
+                    row['wc_record'] = _wc_rec_year
+            else:
+                rows[-1]['wc_record'] = _wc_rec_year
+                rows[-1]['wc_in_progress'] = 1
         seasons[int(season)] = rows
 
     team_doc = {'team': team, 'flag': flag, 'confederation': confed, 'seasons': seasons}

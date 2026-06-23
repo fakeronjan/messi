@@ -974,27 +974,28 @@ function fmtRecord(rec) {
   return `${rec} <span style="color:#888;font-size:0.85em">(${pts})</span>`;
 }
 
-// World Cup finish medal (top line of the record column): 👑 WC gold,
-// 🥈 runner-up, 🥉 third. Mirrors finishBadge's glyphs.
+// World Cup finish medal: 👑 WC gold, 🥈 runner-up, 🥉 third. Mirrors
+// finishBadge's glyphs. Returned bare; rendered on its OWN line atop the cell.
 function wcMedal(finishes) {
   const wc = (finishes || []).find(x => x.tournament === 'WC');
   if (!wc) return '';
-  const e = wc.finish === 1 ? '👑' : wc.finish === 2 ? '🥈' : wc.finish === 3 ? '🥉' : '';
-  return e ? ` ${e}` : '';
+  return wc.finish === 1 ? '👑' : wc.finish === 2 ? '🥈' : wc.finish === 3 ? '🥉' : '';
 }
 
-// World Cup edition record, stacked like COBI's regular/playoff cell:
-//   top   = GROUP stage W-D-L (Pts), with the finish medal appended
-//   bottom = KNOCKOUT W-L (shootout wins/losses count as W/L here), with the
-//            shootout breakdown annotated in parens when relevant
-// Knockout line is omitted for teams eliminated in the group stage.
+// World Cup edition record cell, top to bottom:
+//   1. finish medal on its OWN line (omitted with no top-3 finish / in progress)
+//   2. GROUP stage W-D-L (Pts)  - primary line
+//   3. KNOCKOUT W-L  - dimmed sub-line; shootout W/L count here, annotated in
+//      parens; omitted for group-stage exits / before the knockout round.
 function fmtWcRecord(r, finishes) {
   if (!r) return '0-0-0';
-  const top = `${fmtRecord(`${r.g_w}-${r.g_d}-${r.g_l}`)}${wcMedal(finishes)}`;
+  const e = wcMedal(finishes);
+  const medalLine = e ? `<div style="line-height:1.3">${e}</div>` : '';
+  const group = fmtRecord(`${r.g_w}-${r.g_d}-${r.g_l}`);
   const kw = r.k_w + r.pens_w, kl = r.k_l + r.pens_l;
-  if (!(kw + kl)) return top;
   const pens = (r.pens_w + r.pens_l) ? ` (${r.pens_w}-${r.pens_l} pens)` : '';
-  return `${top}<div style="font-size:10px;color:#888;font-weight:400;line-height:1.2">${kw}-${kl}${pens}</div>`;
+  const koLine = (kw + kl) ? `<div style="font-size:10px;color:#888;font-weight:400;line-height:1.2">${kw}-${kl}${pens}</div>` : '';
+  return `${medalLine}${group}${koLine}`;
 }
 
 function renderTeamTable() {
@@ -1025,7 +1026,7 @@ function renderTeamTable() {
     seasonFilter = 'all';
     seasons.forEach(s => {
       data.seasons[s].forEach(g => {
-        if (g.year_anchor_label === 'End of FIFA World Cup') rows.push({...g, season: s});
+        if (g.wc_record) rows.push({...g, season: s});
       });
     });
     if (rows.length === 0) {
