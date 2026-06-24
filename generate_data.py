@@ -63,6 +63,21 @@ def display_name_at(country, as_of):
     return None
 
 
+_LM_RE = re.compile(r"^([WLDT]) (\d+-\d+) (vs\. \(N\) |vs\. |@ )(.+?)( \([^)]*\))?$")
+
+
+def era_fix_lm(lm, d):
+    """Rewrite a last_match string's opponent to its era-correct name (name-keyed)."""
+    if not lm:
+        return lm
+    m = _LM_RE.match(lm)
+    if not m:
+        return lm
+    res, score, venue, opp, comp = m.groups()
+    era = display_name_at(opp, d)
+    return f"{res} {score} {venue}{era}{comp or ''}" if era else lm
+
+
 def clean(val):
     if pd.isna(val):
         return ''
@@ -538,7 +553,7 @@ standings_data = {
             'confederation':       clean(r['confederation']),
             'rating':              round(float(r['rating']), 3) if not pd.isna(r['rating']) else None,
             'games_played':        int(r['games_played']) if not pd.isna(r['games_played']) else 0,
-            'last_match':          clean(r['last_match']),
+            'last_match':          era_fix_lm(clean(r['last_match']), r['date']),
             'last_match_date':     clean(r['last_match_date']),
             'tournament_finishes': country_year_finishes(r['country'], r['year']),
             'continental_winner':  1 if (r['country'], int(r['year'])) in _continental_winners else 0,
@@ -697,7 +712,7 @@ for team in all_teams:
                 'rating':              round(float(r['rating']), 3) if not pd.isna(r['rating']) else None,
                 'rank':                int(r['rank']) if not pd.isna(r['rank']) else None,
                 'conf_rank':           int(r['conf_rank']) if not pd.isna(r['conf_rank']) else None,
-                'last_match':          clean(r['last_match']),
+                'last_match':          era_fix_lm(clean(r['last_match']), r['date']),
                 'is_end_of_season':    int(r['is_end_of_season']),
                 'is_game_day':         int(r['is_game_day']),
                 'is_year_anchor':      int(r.get('is_year_anchor', 0) or 0),
@@ -803,7 +818,7 @@ for season in all_seasons:
                 'flag':                country_flag(r['country']),
                 'confederation':       clean(r['confederation']),
                 'rating':              round(float(r['rating']), 3) if not pd.isna(r['rating']) else None,
-                'last_match':          clean(r['last_match']),
+                'last_match':          era_fix_lm(clean(r['last_match']), r['date']),
                 'last_match_date':     clean(r['last_match_date']),
                 'tournament_finishes': country_year_finishes(r['country'], r['year']),
                 'continental_winner':  1 if (r['country'], int(r['year'])) in _continental_winners else 0,
