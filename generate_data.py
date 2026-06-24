@@ -304,26 +304,34 @@ for key in _country_year_finishes:
 # rank/rating as they stood going INTO that match (latest snapshot strictly
 # before the match date), so the matches column reads e.g.
 # "W 2-1 vs. France (#4, 2.70)".
-from bisect import bisect_left
+from bisect import bisect_left, bisect_right
 _team_snaps = {}
 for _country, _sub in df[['country', 'date', 'rank', 'rating']].dropna(subset=['date']).groupby('country'):
     _sub = _sub.sort_values('date')
     _team_snaps[_country] = (list(_sub['date']), list(_sub['rank']), list(_sub['rating']))
 
 
-def opp_standing(opp, match_date):
-    """Opponent (rank, rating) as of just before match_date; None if unknown."""
-    snap = _team_snaps.get(opp)
+def country_standing(country, match_date, inclusive=False):
+    """A country's (rank, rating) relative to match_date; None if unknown.
+    inclusive=False -> latest snapshot strictly BEFORE the date (going-in value);
+    inclusive=True  -> latest snapshot ON or before the date (the game-day update,
+    i.e. the post-match value once that day's result is baked in)."""
+    snap = _team_snaps.get(country)
     if not snap:
         return None
     dates, ranks, ratings = snap
-    i = bisect_left(dates, match_date)
+    i = bisect_right(dates, match_date) if inclusive else bisect_left(dates, match_date)
     if i == 0:
         return None
     rk, rt = ranks[i - 1], ratings[i - 1]
     if pd.isna(rk) or pd.isna(rt):
         return None
     return int(rk), round(float(rt), 2)
+
+
+def opp_standing(opp, match_date):
+    """Opponent (rank, rating) as of just before match_date; None if unknown."""
+    return country_standing(opp, match_date, inclusive=False)
 
 
 _wc_team_games = {}
@@ -365,7 +373,8 @@ for (team, yr), gl in _wc_team_games.items():
         _st = opp_standing(m['opp'], m['date'])
         matches.append({'s': f"{letter} {gf}-{ga}{venue}{display_name_at(m['opp'], m['date']) or m['opp']}",
                         'r': _st[0] if _st else None,
-                        'g': _st[1] if _st else None})
+                        'g': _st[1] if _st else None,
+                        'd': f"{m['date'].month:02d}-{m['date'].day:02d}"})
         if i < 3:  # group stage: W-D-L on the scoreboard
             if gf > ga:
                 rec['g_w'] += 1
@@ -381,6 +390,19 @@ for (team, yr), gl in _wc_team_games.items():
             rec['k_l'] += 1
     rec['g_pts'] = 3 * rec['g_w'] + rec['g_d']
     rec['matches'] = matches
+    # The selected team's OWN rank/rating walk across the edition: N+1 boundary
+    # standings in date order - index 0 is pre-tournament (strictly before the
+    # first match), index i+1 is the post-match standing after game i. Mirrors
+    # 'matches' so the frontend can render an offset stairstep beside it; the
+    # final entry equals the end-of-tournament headline rating. {r, g} = rank,
+    # rating (None,None when no snapshot exists, e.g. a country's WC debut).
+    walk = []
+    _pre = country_standing(team, gl[0]['date'], inclusive=False)
+    walk.append({'r': _pre[0], 'g': _pre[1]} if _pre else {'r': None, 'g': None})
+    for m in gl:
+        _st = country_standing(team, m['date'], inclusive=True)
+        walk.append({'r': _st[0], 'g': _st[1]} if _st else {'r': None, 'g': None})
+    rec['team_walk'] = walk
     _wc_record[(team, yr)] = rec
 
 
