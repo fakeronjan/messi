@@ -1172,23 +1172,52 @@ GM_MU, GM_A, GM_B = _beta
 print(f"  goals model: mu={GM_MU:.3f} a={GM_A:.3f} b={GM_B:.3f} "
       f"({np.exp(GM_MU):.2f} goals/team, fit on {len(_gm):,} matches)")
 
-# Identify the in-progress World Cup edition (group games still unplayed).
+# Phase-aware engine: simulates the group stage AND the knockout bracket, so it
+# runs from kickoff to the final. During the group stage it reconstructs the
+# groups + rating-seeds the knockout; once knockouts begin it rebuilds the live
+# bracket from played games (honoring actual matchups + shootouts) and only
+# rating-seeds the still-undetermined future pairings. Validated on the
+# completed 2022 WC (deterministically crowns the real champion).
 _wc_all = games[games['tournament'] == 'FIFA World Cup'].copy()
-_wc_year = None
-if len(_wc_all):
-    _cand = int(_wc_all['date'].dt.year.max())
-    if _wc_all[_wc_all['date'].dt.year == _cand]['home_score'].isna().any():
-        _wc_year = _cand
-
+_wc_year = int(_wc_all['date'].dt.year.max()) if len(_wc_all) else None
 wc_odds = {'edition': _wc_year,
            'generated': datetime.now(timezone.utc).strftime('%Y-%m-%d'), 'teams': []}
-if _wc_year is not None:
-    _ed = _wc_all[_wc_all['date'].dt.year == _wc_year]
-    _played = _ed[_ed['home_score'].notna()]
-    _remaining = _ed[_ed['home_score'].isna()]
-    # Groups = connected components of the group-stage opponent graph.
+
+def _ko_winner(row):
+    """Knockout winner, honoring a penalty shootout on a regulation draw."""
+    if row['home_score'] > row['away_score']: return row['home_team']
+    if row['away_score'] > row['home_score']: return row['away_team']
+    so = row.get('shootout_winner')
+    return so if isinstance(so, str) and so.strip() else None
+
+_ed = _wc_all[_wc_all['date'].dt.year == _wc_year].sort_values('date') if _wc_year else _wc_all.iloc[:0]
+_nteams = pd.concat([_ed['home_team'], _ed['away_team']]).nunique() if len(_ed) else 0
+if _nteams >= 4:
+    _ngroups = _nteams // 4
+    _grp = _ed.iloc[:_ngroups * 6]            # group stage precedes knockouts by date
+    _ko = _ed.iloc[_ngroups * 6:]
+    _grp_unplayed = _grp[_grp['home_score'].isna()]
+    _grp_played = _grp[_grp['home_score'].notna()]
+    _n_thirds = 8 if _ngroups == 12 else 0
+    _cur = {_t: (_team_snaps[_t][2][-1] if _team_snaps.get(_t) and _team_snaps[_t][2] else 0.0)
+            for _t in set(pd.concat([_ed['home_team'], _ed['away_team']]))}
+
+    # Knockout games played so far -> winner, round, eliminations (skip 3rd place).
+    _played_win = {}; _game_round = {}; _eliminated = set(); _cnt = {}
+    for _, _g in _ko[_ko['home_score'].notna()].sort_values('date').iterrows():
+        _a, _b = _g['home_team'], _g['away_team']
+        if _a in _eliminated and _b in _eliminated:
+            continue                          # 3rd-place playoff (both already lost)
+        _w = _ko_winner(_g); _k = frozenset({_a, _b})
+        _played_win[_k] = _w
+        _game_round[_k] = max(_cnt.get(_a, 0), _cnt.get(_b, 0)) + 1
+        _cnt[_a] = _cnt.get(_a, 0) + 1; _cnt[_b] = _cnt.get(_b, 0) + 1
+        _eliminated.add(_b if _w == _a else _a)
+    _ko_teams = set().union(*_played_win) if _played_win else set()
+
+    # Groups = clean cliques from the group-stage games only.
     _adj = {}
-    for _, _g in _ed.iterrows():
+    for _, _g in _grp.iterrows():
         _adj.setdefault(_g['home_team'], set()).add(_g['away_team'])
         _adj.setdefault(_g['away_team'], set()).add(_g['home_team'])
     _seen = set(); _groups = []
@@ -1202,93 +1231,139 @@ if _wc_year is not None:
                 continue
             _comp.add(_x); _seen.add(_x); _st += [_y for _y in _adj[_x] if _y not in _comp]
         _groups.append(sorted(_comp))
-    _cur = {_t: (_team_snaps[_t][2][-1] if _team_snaps.get(_t) and _team_snaps[_t][2] else 0.0)
-            for _t in _adj}
-    # 2026 format: 12 groups -> top 2 each (24) + 8 best third-place teams = 32.
-    _n_thirds = 8 if len(_groups) == 12 else 0
+    _gidx = {t: i for i, gp in enumerate(_groups) for t in gp}
+    _teams = sorted(_adj)
 
-    def _apply(tbl, ht, at, hs, as_):
-        tbl[ht]['gf'] += hs; tbl[ht]['gd'] += hs - as_
-        tbl[at]['gf'] += as_; tbl[at]['gd'] += as_ - hs
-        if hs > as_:   tbl[ht]['pts'] += 3
-        elif hs < as_: tbl[at]['pts'] += 3
-        else:          tbl[ht]['pts'] += 1; tbl[at]['pts'] += 1
-    _base = {_t: {'pts': 0, 'gd': 0, 'gf': 0} for _t in _adj}
-    for _, _g in _played.iterrows():
-        _apply(_base, _g['home_team'], _g['away_team'], int(_g['home_score']), int(_g['away_score']))
-    _rem = [(_g['home_team'], _g['away_team'], 0.0 if bool(_g.get('neutral')) else 1.0)
-            for _, _g in _remaining.iterrows()]
-
-    _rng = np.random.default_rng(20260101)   # fixed seed: odds move with data, not MC noise
-
-    def _score(rh, ra, ha):
+    _rng = np.random.default_rng(20260101)    # fixed seed: odds move with data, not MC noise
+    def _score(rh, ra, ha=0.0):
         return (int(_rng.poisson(np.exp(GM_MU + GM_A * (rh - ra) + GM_B * ha))),
                 int(_rng.poisson(np.exp(GM_MU - GM_A * (rh - ra) - GM_B * ha))))
 
-    def _seedpos(n):
-        o = [1]
-        while len(o) < n:
-            m = len(o) * 2; o = [v for x in o for v in (x, m + 1 - x)]
-        return o
+    def _base_table():
+        tb = {t: {'pts': 0, 'gd': 0, 'gf': 0} for t in _teams}
+        for _, _g in _grp_played.iterrows():
+            h, a, hs, as_ = _g['home_team'], _g['away_team'], int(_g['home_score']), int(_g['away_score'])
+            tb[h]['gf'] += hs; tb[h]['gd'] += hs - as_; tb[a]['gf'] += as_; tb[a]['gd'] += as_ - hs
+            if hs > as_: tb[h]['pts'] += 3
+            elif hs < as_: tb[a]['pts'] += 3
+            else: tb[h]['pts'] += 1; tb[a]['pts'] += 1
+        return tb
+
+    def _qualifiers(tb):
+        win = []; ru = []; third = []
+        for gp in _groups:
+            rk = sorted(gp, key=lambda t: (tb[t]['pts'], tb[t]['gd'], tb[t]['gf'], _rng.random()), reverse=True)
+            win.append(rk[0]); ru.append(rk[1])
+            if len(rk) > 2: third.append(rk[2])
+        third = sorted(third, key=lambda t: (tb[t]['pts'], tb[t]['gd'], tb[t]['gf'], _rng.random()), reverse=True)
+        q = win + ru + third[:_n_thirds]
+        if _ko_teams:    # every actual knockout participant must be a qualifier
+            q = list(_ko_teams) + [x for x in q if x not in _ko_teams]
+            q = q[:len(win) + len(ru) + _n_thirds]
+        return q
+
+    _STAGE = {32: 'r32', 16: 'r16', 8: 'qf', 4: 'sf', 2: 'final', 1: 'champ'}
+    _KEYS = ('r32', 'r16', 'qf', 'sf', 'final', 'champ')
+
+    def _build_bracket(quals):
+        """Leaf-ordered bracket consistent with played KO games; rating-seed the rest."""
+        blocks = [{'order': [q], 'rep': q} for q in quals]
+        rr = lambda b: _cur.get(b['rep'], -99)
+        level = 1
+        while len(blocks) > 1:
+            paired = set(); newb = []
+            for b in blocks:
+                if id(b) in paired:
+                    continue
+                partner = None
+                for b2 in blocks:
+                    if b2 is b or id(b2) in paired:
+                        continue
+                    k = frozenset({b['rep'], b2['rep']})
+                    if k in _played_win and _game_round.get(k) == level:
+                        partner = b2; break
+                if partner is not None:
+                    paired.add(id(b)); paired.add(id(partner))
+                    newb.append({'order': b['order'] + partner['order'],
+                                 'rep': _played_win[frozenset({b['rep'], partner['rep']})]})
+            rem = [b for b in blocks if id(b) not in paired]
+            rem.sort(key=rr, reverse=True)
+            n = len(rem)
+            for k in range(n // 2):
+                a, b = rem[k], rem[n - 1 - k]
+                newb.append({'order': a['order'] + b['order'], 'rep': a['rep'] if rr(a) >= rr(b) else b['rep']})
+            blocks = newb; level += 1
+        return blocks[0]['order'] if blocks else []
+
+    def _sim_ko(order, reach):
+        cur = list(order)
+        if len(cur) in _STAGE:
+            for t in cur: reach[t][_STAGE[len(cur)]] += 1
+        while len(cur) > 1:
+            nxt = []
+            for i in range(0, len(cur), 2):
+                a, b = cur[i], cur[i + 1]; k = frozenset({a, b})
+                if k in _played_win:
+                    w = _played_win[k]
+                else:
+                    gh, ga = _score(_cur[a], _cur[b])
+                    if gh > ga: w = a
+                    elif ga > gh: w = b
+                    else: w = a if _rng.random() < 1 / (1 + np.exp(-0.25 * (_cur[a] - _cur[b]))) else b
+                nxt.append(w)
+            cur = nxt
+            if len(cur) in _STAGE:
+                for w in cur: reach[w][_STAGE[len(cur)]] += 1
 
     _NSIM = 20000
-    _KO = ['r16', 'qf', 'sf', 'final', 'champ']
-    _reach = {_t: {k: 0 for k in ('r32',) + tuple(_KO)} for _t in _adj}
-    for _ in range(_NSIM):
-        _tbl = {_t: dict(_base[_t]) for _t in _base}
-        for ht, at, ha in _rem:
-            _gh, _ga = _score(_cur[ht], _cur[at], ha); _apply(_tbl, ht, at, _gh, _ga)
-        _win = []; _ru = []; _third = []
-        for _gp in _groups:
-            _rk = sorted(_gp, key=lambda t: (_tbl[t]['pts'], _tbl[t]['gd'], _tbl[t]['gf'], _rng.random()),
-                         reverse=True)
-            _win.append(_rk[0]); _ru.append(_rk[1])
-            if len(_rk) > 2:
-                _third.append(_rk[2])
-        _third = sorted(_third, key=lambda t: (_tbl[t]['pts'], _tbl[t]['gd'], _tbl[t]['gf'], _rng.random()),
-                        reverse=True)
-        _quals = _win + _ru + _third[:_n_thirds]
-        _bn = 1
-        while _bn < len(_quals):
-            _bn *= 2
-        _qs = sorted(_quals, key=lambda t: _cur[t], reverse=True)
-        _slot = {i + 1: t for i, t in enumerate(_qs)}
-        _round = [_slot.get(p) for p in _seedpos(_bn)]   # None = bye
-        for _t in _quals:
-            _reach[_t]['r32'] += 1
-        _ri = 0
-        while len(_round) > 1:
-            _nxt = []
-            for _i in range(0, len(_round), 2):
-                _a, _b = _round[_i], _round[_i + 1]
-                if _a is None:   _w = _b
-                elif _b is None: _w = _a
-                else:
-                    _gh, _ga = _score(_cur[_a], _cur[_b], 0.0)
-                    if _gh > _ga:   _w = _a
-                    elif _ga > _gh: _w = _b
-                    else: _w = _a if _rng.random() < 1 / (1 + np.exp(-0.25 * (_cur[_a] - _cur[_b]))) else _b
-                _nxt.append(_w)
-            for _w in _nxt:
-                if _w is not None and _ri < len(_KO):
-                    _reach[_w][_KO[_ri]] += 1
-            _round = _nxt; _ri += 1
+    _reach = {t: {k: 0 for k in _KEYS} for t in _teams}
+    _group_done = len(_grp_unplayed) == 0 and len(_grp_played) > 0
+    if _group_done:
+        _quals_fixed = _qualifiers(_base_table())     # qualifiers fixed once groups end
+        _order_fixed = _build_bracket(_quals_fixed)
+        for _ in range(_NSIM):
+            _sim_ko(_order_fixed, _reach)
+        _alive = [t for t in _quals_fixed if t not in _eliminated]
+        _in_progress = len(_alive) > 1
+        _games_left = max(0, len(_alive) - 1)
+        _qual_set = set(_quals_fixed)
+    else:
+        for _ in range(_NSIM):
+            tb = {t: dict(v) for t, v in _base_table().items()}
+            for _, _g in _grp_unplayed.iterrows():
+                gh, ga = _score(_cur[_g['home_team']], _cur[_g['away_team']],
+                                0.0 if bool(_g.get('neutral')) else 1.0)
+                h, a = _g['home_team'], _g['away_team']
+                tb[h]['gf'] += gh; tb[h]['gd'] += gh - ga; tb[a]['gf'] += ga; tb[a]['gd'] += ga - gh
+                if gh > ga: tb[h]['pts'] += 3
+                elif gh < ga: tb[a]['pts'] += 3
+                else: tb[h]['pts'] += 1; tb[a]['pts'] += 1
+            _sim_ko(_build_bracket(_qualifiers(tb)), _reach)
+        _in_progress = True
+        _games_left = len(_grp_unplayed)
+        _qual_set = None
 
-    _gidx = {t: i for i, gp in enumerate(_groups) for t in gp}
-    for _t in sorted(_adj, key=lambda t: _reach[t]['champ'], reverse=True):
-        _r = _reach[_t]
-        wc_odds['teams'].append({
-            'team': _t, 'flag': country_flag(_t), 'rating': round(float(_cur[_t]), 2),
-            'group': _gidx[_t],
-            'champ': _r['champ'] / _NSIM, 'final': _r['final'] / _NSIM, 'sf': _r['sf'] / _NSIM,
-            'qf': _r['qf'] / _NSIM, 'r16': _r['r16'] / _NSIM, 'r32': _r['r32'] / _NSIM,
-        })
-    wc_odds['n_sims'] = _NSIM
-    wc_odds['games_left'] = len(_rem)
-    print(f"  {_wc_year} WC: {len(_groups)} groups, {len(_rem)} games left, {_NSIM:,} sims. "
-          f"Favorite: {wc_odds['teams'][0]['team']} {wc_odds['teams'][0]['champ'] * 100:.1f}%")
+    if _in_progress and _teams:
+        for _t in sorted(_teams, key=lambda t: (_reach[t]['champ'], _reach[t]['final'], _reach[t]['sf']),
+                         reverse=True):
+            _r = _reach[_t]
+            _elim = (_t in _eliminated) or (_qual_set is not None and _t not in _qual_set)
+            wc_odds['teams'].append({
+                'team': _t, 'flag': country_flag(_t), 'rating': round(float(_cur[_t]), 2),
+                'group': _gidx[_t], 'eliminated': bool(_elim),
+                'champ': _r['champ'] / _NSIM, 'final': _r['final'] / _NSIM, 'sf': _r['sf'] / _NSIM,
+                'qf': _r['qf'] / _NSIM, 'r16': _r['r16'] / _NSIM, 'r32': _r['r32'] / _NSIM,
+            })
+        wc_odds['n_sims'] = _NSIM
+        wc_odds['games_left'] = _games_left
+        wc_odds['phase'] = 'group' if not _group_done else 'knockout'
+        print(f"  {_wc_year} WC ({wc_odds['phase']}): {_games_left} games to a champion, "
+              f"{_NSIM:,} sims. Favorite: {wc_odds['teams'][0]['team']} "
+              f"{wc_odds['teams'][0]['champ'] * 100:.1f}%")
+    else:
+        print(f"  {_wc_year} WC complete or no live edition; wrote empty odds (tab hides).")
 else:
-    print("  no in-progress World Cup; wrote empty odds.")
+    print("  no World Cup data; wrote empty odds.")
 
 with open('docs/data/wc_odds.json', 'w') as f:
     json.dump(wc_odds, f, separators=(',', ':'))

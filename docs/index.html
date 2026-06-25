@@ -214,6 +214,9 @@
   .wc-bar-track { flex: 1; height: 9px; min-width: 60px; background: #eee; border-radius: 5px; overflow: hidden; }
   .wc-bar-fill { height: 100%; background: #1a6b8a; border-radius: 5px; }
   .wc-odds-table td.rating-cell { color: #555; }
+  /* Knockout phase: eliminated teams fade out (kept for the bracket-tracker view). */
+  .wc-odds-table tr.wc-elim { opacity: 0.4; }
+  .wc-out { font-size: 11px; font-weight: 700; color: #b23; letter-spacing: 0.5px; text-transform: uppercase; }
 
   .finish-badge {
     font-size: 10px;
@@ -1438,10 +1441,15 @@ function renderWcOdds() {
     `${wcOddsData.edition} FIFA World Cup 🏆 Win Probability`;
   const sims = (wcOddsData.n_sims || 0).toLocaleString();
   const left = wcOddsData.games_left;
+  const phase = wcOddsData.phase || 'group';
+  const phaseTxt = phase === 'group'
+    ? `${left} group game${left === 1 ? '' : 's'} left, then the knockout bracket`
+    : `live knockout bracket · ${left} game${left === 1 ? '' : 's'} to a champion`;
   document.getElementById('wc-odds-note').textContent =
-    `${sims} Monte Carlo simulations from current ratings · ${left} group game${left === 1 ? '' : 's'} left, then a rating-seeded knockout · each column is the share of simulations a country reaches that stage`;
+    `${sims} Monte Carlo simulations from current ratings · ${phaseTxt} · each column is the share of simulations a country reaches that stage`;
 
-  const maxCh = Math.max(...teams.map(t => t.champ)) || 1;
+  // Bar scale off the strongest still-alive team so eliminated 0%s don't flatten it.
+  const maxCh = Math.max(...teams.map(t => t.champ), 0.0001);
   const pc = v => (v * 100 >= 9.95 ? String(Math.round(v * 100)) : (v * 100).toFixed(1));
   const cell = v => `<td class="col-num" style="font-variant-numeric:tabular-nums">${v >= 0.0005 ? pc(v) + '%' : '–'}</td>`;
   const rows = teams.map((t, i) => {
@@ -1451,9 +1459,11 @@ function renderWcOdds() {
       ? `<td class="team-cell linked" data-team-slug="${slug}">${inner}</td>`
       : `<td class="team-cell">${inner}</td>`;
     const w = (t.champ / maxCh) * 100;
-    const champCell = `<div class="wc-bar-wrap"><span class="wc-bar-num">${pc(t.champ)}%</span>`
-      + `<div class="wc-bar-track"><div class="wc-bar-fill" style="width:${w.toFixed(1)}%"></div></div></div>`;
-    return `<tr>
+    const champCell = t.eliminated
+      ? `<span class="wc-out">out</span>`
+      : `<div class="wc-bar-wrap"><span class="wc-bar-num">${pc(t.champ)}%</span>`
+        + `<div class="wc-bar-track"><div class="wc-bar-fill" style="width:${w.toFixed(1)}%"></div></div></div>`;
+    return `<tr class="${t.eliminated ? 'wc-elim' : ''}">
       <td class="rank-cell">${i + 1}</td>
       ${teamTd}
       <td class="col-num rating-cell">${t.rating.toFixed(2)}</td>
