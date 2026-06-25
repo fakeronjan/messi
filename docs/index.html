@@ -208,6 +208,13 @@
   .bar-pos { background: #1a6b8a; }
   .bar-neg { background: #ff6eb4; }
 
+  /* World Cup win-probability bar (champion share). */
+  .wc-bar-wrap { display: flex; align-items: center; gap: 8px; }
+  .wc-bar-num { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 40px; text-align: right; }
+  .wc-bar-track { flex: 1; height: 9px; min-width: 60px; background: #eee; border-radius: 5px; overflow: hidden; }
+  .wc-bar-fill { height: 100%; background: #1a6b8a; border-radius: 5px; }
+  .wc-odds-table td.rating-cell { color: #555; }
+
   .finish-badge {
     font-size: 10px;
     font-weight: 700;
@@ -401,6 +408,7 @@
 
 <nav>
   <button class="active" data-tab="standings">Standings</button>
+  <button data-tab="wc-odds" id="wc-odds-nav" style="display:none">🏆 WC Odds</button>
   <button data-tab="team-summary">Country Summary</button>
   <button data-tab="league-history">Tournaments</button>
   <button data-tab="goat">GOAT Table</button>
@@ -447,6 +455,12 @@
   <div class="league-pills" id="goat-conf-pills"></div>
   <p class="data-note">Top 50 ratings, taken at the end of each major tournament. Eligibility requires winning a major continental trophy (or finishing 2nd in the FIFA World Cup) in that year. Data covers 1986 through the current year.</p>
   <div id="goat-table-wrap"><p class="loading">Loading GOAT table...</p></div>
+</div>
+
+<div id="wc-odds" class="tab">
+  <h2 id="wc-odds-title" style="margin:4px 0 2px;font-size:18px"></h2>
+  <p class="data-note" id="wc-odds-note"></p>
+  <div id="wc-odds-wrap"><p class="loading">Loading World Cup odds...</p></div>
 </div>
 
 <div style="text-align:center;font-size:11px;color:#999;font-style:italic;margin:28px 0 10px;line-height:1.7">
@@ -1403,6 +1417,61 @@ function renderGoat() {
   attachLinks();
 }
 
+// ── World Cup win-probability odds ───────────────────────────────────────────
+let wcOddsData = null;
+async function loadWcOdds() {
+  try {
+    const res = await fetch(`${BASE}/wc_odds.json`);
+    wcOddsData = await res.json();
+  } catch(e) { wcOddsData = null; }
+  renderWcOdds();
+}
+
+function renderWcOdds() {
+  const nav = document.getElementById('wc-odds-nav');
+  const teams = (wcOddsData && wcOddsData.teams) || [];
+  // No World Cup in progress -> hide the tab entirely (odds only exist mid-event).
+  if (!teams.length) { if (nav) nav.style.display = 'none'; return; }
+  if (nav) nav.style.display = '';
+
+  document.getElementById('wc-odds-title').textContent =
+    `${wcOddsData.edition} FIFA World Cup 🏆 Win Probability`;
+  const sims = (wcOddsData.n_sims || 0).toLocaleString();
+  const left = wcOddsData.games_left;
+  document.getElementById('wc-odds-note').textContent =
+    `${sims} Monte Carlo simulations from current ratings · ${left} group game${left === 1 ? '' : 's'} left, then a rating-seeded knockout · each column is the share of simulations a country reaches that stage`;
+
+  const maxCh = Math.max(...teams.map(t => t.champ)) || 1;
+  const pc = v => (v * 100 >= 9.95 ? String(Math.round(v * 100)) : (v * 100).toFixed(1));
+  const cell = v => `<td class="col-num" style="font-variant-numeric:tabular-nums">${v >= 0.0005 ? pc(v) + '%' : '–'}</td>`;
+  const rows = teams.map((t, i) => {
+    const slug = nameToSlug[t.team];
+    const inner = `<span style="margin-right:5px">${t.flag || ''}</span>${t.team}`;
+    const teamTd = slug
+      ? `<td class="team-cell linked" data-team-slug="${slug}">${inner}</td>`
+      : `<td class="team-cell">${inner}</td>`;
+    const w = (t.champ / maxCh) * 100;
+    const champCell = `<div class="wc-bar-wrap"><span class="wc-bar-num">${pc(t.champ)}%</span>`
+      + `<div class="wc-bar-track"><div class="wc-bar-fill" style="width:${w.toFixed(1)}%"></div></div></div>`;
+    return `<tr>
+      <td class="rank-cell">${i + 1}</td>
+      ${teamTd}
+      <td class="col-num rating-cell">${t.rating.toFixed(2)}</td>
+      <td>${champCell}</td>
+      ${cell(t.final)}${cell(t.sf)}${cell(t.qf)}${cell(t.r16)}
+    </tr>`;
+  }).join('');
+  document.getElementById('wc-odds-wrap').innerHTML = `<table class="wc-odds-table">
+    <thead><tr>
+      <th style="text-align:center">Rank</th><th>Country</th>
+      <th class="col-num">Rating</th>
+      <th style="min-width:130px">Champion 🏆</th>
+      <th class="col-num">Final</th><th class="col-num">Semis</th>
+      <th class="col-num col-hide-mobile">Quarters</th><th class="col-num col-hide-mobile">R16</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+  attachLinks();
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 buildConfPills('goat-conf-pills', true, goatConf, v => {
   goatConf = v;
@@ -1421,6 +1490,7 @@ buildPillsFromOpts('history-nations-pills',     HISTORY_NATIONS,     historyTour
   initStandings();
   loadChampions();
   loadGoat();
+  loadWcOdds();
 })();
 
 // Auto-resize: when embedded in an iframe, post our scroll height to the

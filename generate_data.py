@@ -1122,5 +1122,176 @@ for tournament, pre_rows in PRE_RATED_PODIUMS.items():
 with open('docs/data/champions.json', 'w') as f:
     json.dump(champions, f, separators=(',', ':'))
 
+# ── 6. World Cup win-probability simulation (Monte Carlo) ─────────────────────
+# Runs only while a World Cup is in progress (group fixtures still unplayed).
+# Engine: a Poisson goals model fit on every international match (going-in
+# rating diff + home advantage) drives a Monte Carlo of the remaining group
+# games + a rating-seeded knockout. The match model is well-calibrated on a
+# 2022+ holdout (predicted P(win) tracks actual within ~2pts per bin); the
+# knockout is rating-seeded (1 v N standard bracket) because the real FIFA
+# bracket template + group letters are not in the feed.
+import numpy as np
+print("Simulating World Cup win probabilities...")
+
+# Raw (unrounded) going-in rating from the per-team snapshot series. Match dates
+# here are Timestamps (games['date'] was promoted above); _team_snaps keys are
+# python dates, so normalize before the bisect.
+def _raw_pre_rating(team, d):
+    s = _team_snaps.get(team)
+    if not s:
+        return None
+    dates, _ranks, ratings = s
+    key = d.date() if hasattr(d, 'date') else d
+    i = bisect_left(dates, key)
+    return ratings[i - 1] if i > 0 else None
+
+# Fit log λ = μ ± (a·rating_diff + b·home_adv): home + away stacked as 2N Poisson
+# observations sharing (μ, a, b) with a sign flip, solved by Newton (no scipy).
+_gm_rows = []
+for _, _g in games.iterrows():
+    if pd.isna(_g['home_score']) or pd.isna(_g['away_score']) or pd.isna(_g['date']):
+        continue
+    _rh = _raw_pre_rating(_g['home_team'], _g['date'])
+    _ra = _raw_pre_rating(_g['away_team'], _g['date'])
+    if _rh is None or _ra is None:
+        continue
+    _gm_rows.append((_rh - _ra, 0.0 if bool(_g.get('neutral')) else 1.0,
+                     int(_g['home_score']), int(_g['away_score'])))
+_gm = np.array(_gm_rows, float)
+_X = np.vstack([np.column_stack([np.ones(len(_gm)),  _gm[:, 0],  _gm[:, 1]]),
+                np.column_stack([np.ones(len(_gm)), -_gm[:, 0], -_gm[:, 1]])])
+_yv = np.concatenate([_gm[:, 2], _gm[:, 3]])
+_beta = np.zeros(3)
+for _ in range(25):
+    _lam = np.exp(_X @ _beta)
+    _step = np.linalg.solve((_X * _lam[:, None]).T @ _X, _X.T @ (_yv - _lam))
+    _beta += _step
+    if np.abs(_step).max() < 1e-9:
+        break
+GM_MU, GM_A, GM_B = _beta
+print(f"  goals model: mu={GM_MU:.3f} a={GM_A:.3f} b={GM_B:.3f} "
+      f"({np.exp(GM_MU):.2f} goals/team, fit on {len(_gm):,} matches)")
+
+# Identify the in-progress World Cup edition (group games still unplayed).
+_wc_all = games[games['tournament'] == 'FIFA World Cup'].copy()
+_wc_year = None
+if len(_wc_all):
+    _cand = int(_wc_all['date'].dt.year.max())
+    if _wc_all[_wc_all['date'].dt.year == _cand]['home_score'].isna().any():
+        _wc_year = _cand
+
+wc_odds = {'edition': _wc_year,
+           'generated': datetime.now(timezone.utc).strftime('%Y-%m-%d'), 'teams': []}
+if _wc_year is not None:
+    _ed = _wc_all[_wc_all['date'].dt.year == _wc_year]
+    _played = _ed[_ed['home_score'].notna()]
+    _remaining = _ed[_ed['home_score'].isna()]
+    # Groups = connected components of the group-stage opponent graph.
+    _adj = {}
+    for _, _g in _ed.iterrows():
+        _adj.setdefault(_g['home_team'], set()).add(_g['away_team'])
+        _adj.setdefault(_g['away_team'], set()).add(_g['home_team'])
+    _seen = set(); _groups = []
+    for _t in _adj:
+        if _t in _seen:
+            continue
+        _comp = set(); _st = [_t]
+        while _st:
+            _x = _st.pop()
+            if _x in _comp:
+                continue
+            _comp.add(_x); _seen.add(_x); _st += [_y for _y in _adj[_x] if _y not in _comp]
+        _groups.append(sorted(_comp))
+    _cur = {_t: (_team_snaps[_t][2][-1] if _team_snaps.get(_t) and _team_snaps[_t][2] else 0.0)
+            for _t in _adj}
+    # 2026 format: 12 groups -> top 2 each (24) + 8 best third-place teams = 32.
+    _n_thirds = 8 if len(_groups) == 12 else 0
+
+    def _apply(tbl, ht, at, hs, as_):
+        tbl[ht]['gf'] += hs; tbl[ht]['gd'] += hs - as_
+        tbl[at]['gf'] += as_; tbl[at]['gd'] += as_ - hs
+        if hs > as_:   tbl[ht]['pts'] += 3
+        elif hs < as_: tbl[at]['pts'] += 3
+        else:          tbl[ht]['pts'] += 1; tbl[at]['pts'] += 1
+    _base = {_t: {'pts': 0, 'gd': 0, 'gf': 0} for _t in _adj}
+    for _, _g in _played.iterrows():
+        _apply(_base, _g['home_team'], _g['away_team'], int(_g['home_score']), int(_g['away_score']))
+    _rem = [(_g['home_team'], _g['away_team'], 0.0 if bool(_g.get('neutral')) else 1.0)
+            for _, _g in _remaining.iterrows()]
+
+    _rng = np.random.default_rng(20260101)   # fixed seed: odds move with data, not MC noise
+
+    def _score(rh, ra, ha):
+        return (int(_rng.poisson(np.exp(GM_MU + GM_A * (rh - ra) + GM_B * ha))),
+                int(_rng.poisson(np.exp(GM_MU - GM_A * (rh - ra) - GM_B * ha))))
+
+    def _seedpos(n):
+        o = [1]
+        while len(o) < n:
+            m = len(o) * 2; o = [v for x in o for v in (x, m + 1 - x)]
+        return o
+
+    _NSIM = 20000
+    _KO = ['r16', 'qf', 'sf', 'final', 'champ']
+    _reach = {_t: {k: 0 for k in ('r32',) + tuple(_KO)} for _t in _adj}
+    for _ in range(_NSIM):
+        _tbl = {_t: dict(_base[_t]) for _t in _base}
+        for ht, at, ha in _rem:
+            _gh, _ga = _score(_cur[ht], _cur[at], ha); _apply(_tbl, ht, at, _gh, _ga)
+        _win = []; _ru = []; _third = []
+        for _gp in _groups:
+            _rk = sorted(_gp, key=lambda t: (_tbl[t]['pts'], _tbl[t]['gd'], _tbl[t]['gf'], _rng.random()),
+                         reverse=True)
+            _win.append(_rk[0]); _ru.append(_rk[1])
+            if len(_rk) > 2:
+                _third.append(_rk[2])
+        _third = sorted(_third, key=lambda t: (_tbl[t]['pts'], _tbl[t]['gd'], _tbl[t]['gf'], _rng.random()),
+                        reverse=True)
+        _quals = _win + _ru + _third[:_n_thirds]
+        _bn = 1
+        while _bn < len(_quals):
+            _bn *= 2
+        _qs = sorted(_quals, key=lambda t: _cur[t], reverse=True)
+        _slot = {i + 1: t for i, t in enumerate(_qs)}
+        _round = [_slot.get(p) for p in _seedpos(_bn)]   # None = bye
+        for _t in _quals:
+            _reach[_t]['r32'] += 1
+        _ri = 0
+        while len(_round) > 1:
+            _nxt = []
+            for _i in range(0, len(_round), 2):
+                _a, _b = _round[_i], _round[_i + 1]
+                if _a is None:   _w = _b
+                elif _b is None: _w = _a
+                else:
+                    _gh, _ga = _score(_cur[_a], _cur[_b], 0.0)
+                    if _gh > _ga:   _w = _a
+                    elif _ga > _gh: _w = _b
+                    else: _w = _a if _rng.random() < 1 / (1 + np.exp(-0.25 * (_cur[_a] - _cur[_b]))) else _b
+                _nxt.append(_w)
+            for _w in _nxt:
+                if _w is not None and _ri < len(_KO):
+                    _reach[_w][_KO[_ri]] += 1
+            _round = _nxt; _ri += 1
+
+    _gidx = {t: i for i, gp in enumerate(_groups) for t in gp}
+    for _t in sorted(_adj, key=lambda t: _reach[t]['champ'], reverse=True):
+        _r = _reach[_t]
+        wc_odds['teams'].append({
+            'team': _t, 'flag': country_flag(_t), 'rating': round(float(_cur[_t]), 2),
+            'group': _gidx[_t],
+            'champ': _r['champ'] / _NSIM, 'final': _r['final'] / _NSIM, 'sf': _r['sf'] / _NSIM,
+            'qf': _r['qf'] / _NSIM, 'r16': _r['r16'] / _NSIM, 'r32': _r['r32'] / _NSIM,
+        })
+    wc_odds['n_sims'] = _NSIM
+    wc_odds['games_left'] = len(_rem)
+    print(f"  {_wc_year} WC: {len(_groups)} groups, {len(_rem)} games left, {_NSIM:,} sims. "
+          f"Favorite: {wc_odds['teams'][0]['team']} {wc_odds['teams'][0]['champ'] * 100:.1f}%")
+else:
+    print("  no in-progress World Cup; wrote empty odds.")
+
+with open('docs/data/wc_odds.json', 'w') as f:
+    json.dump(wc_odds, f, separators=(',', ':'))
+
 print(f"Done. {len(teams_index)} teams, {len(standings_data['teams'])} in current standings.")
 print(f"Wrote {len(all_seasons)} season files. Standings date: {latest_date}")
