@@ -42,6 +42,19 @@ friendly_weight    = 0.25           # WLS observation weight applied to friendli
                                     # (competitive games default to 1.0; tournament
                                     # tier uplift is multiplied on top via TOURNAMENT_WEIGHTS)
 
+# ── Offense/defense split (added 2026-06-26) ────────────────────────────────
+# A companion solve decomposes each team's rating into an attacking rating
+# (goals scored) and a defending rating (goals conceded), re-anchored so
+# rating_o + rating_d equals the calibrated rating. See _solve_wls_od.
+od_off_share       = 0.5            # share of each match's home edge attributed to attack
+                                    # (the rest goes to defense). 0.5 = even split.
+od_goal_cap        = 6              # per-side goal clip for the O/D lean only (the re-anchor
+                                    # still pins O+D to the calibrated rating, so this touches
+                                    # the attack-vs-defense lean, not the level). Without it,
+                                    # historic routs (Australia 31-0 American Samoa, 2001 OFC
+                                    # qualifying) hand minnows the top attacking leans. 6 tames
+                                    # those while keeping real attacking dominance intact.
+
 # ── Confederation calibration (added 2026-06-07) ────────────────────────────
 # The match graph is 6 dense confederation clusters joined by thin bridges
 # (mostly down-weighted friendlies). The WLS solve pins WITHIN-confederation
@@ -364,6 +377,87 @@ def _solve_wls(window_df, confed_prior=None, prior_lambda=0.0):
     out = pd.DataFrame({"name": teams, "rating": r})
     out["rank"] = out["rating"].rank(ascending=False, method="min").astype(int)
     return out
+
+
+def _solve_wls_od(window_df, off_share=0.5, goal_cap=None):
+    """
+    Offense/defense companion to _solve_wls on the same window. Splits team
+    strength into an attacking rating (goals scored vs an average opponent) and
+    a defending rating (goals conceded vs an average opponent).
+
+    Each match contributes two goal half-equations, from the home perspective:
+        home_O - away_D = home_goals - mu - hfa * off_share
+        away_O - home_D = away_goals - mu + hfa * (1 - off_share)
+    where mu is the window mean goals per team per match, so attack and defense
+    are each centered on zero, and the per-match hfa (0 at neutral venues) is
+    split between the two sides by off_share.
+
+    Parameter layout: [O_1..O_n, D_1..D_n], pinned by two zero-sum rows. A
+    higher rating_o means more goals scored than an average team would; a higher
+    rating_d means fewer conceded. A team's net contribution to goal margin is
+    rating_o + rating_d, so the home-minus-away margin reproduces the single
+    solver's (home - away) + hfa.
+
+    The raw O/D level is NOT calibrated here. The caller re-anchors rating_o +
+    rating_d to the confederation-calibrated rating, so the margin cap, shootout
+    handling, and partial pooling carry through to the split; only the
+    attack-vs-defense lean (rating_o - rating_d) comes from this solve.
+
+    goal_cap, when set, clips each side's goals before the fit so one rout (e.g.
+    a 9-0 qualifier) can't dominate a team's attacking lean.
+    """
+    teams = sorted(set(window_df["home_team"]) | set(window_df["away_team"]))
+    team_idx = {t: i for i, t in enumerate(teams)}
+    n_teams = len(teams)
+    n_games = len(window_df)
+
+    home_goals = window_df["home_score_int"].to_numpy(dtype=float)
+    away_goals = window_df["away_score_int"].to_numpy(dtype=float)
+    if goal_cap is not None:
+        home_goals = np.clip(home_goals, 0, goal_cap)
+        away_goals = np.clip(away_goals, 0, goal_cap)
+    hfa        = window_df["hfa"].to_numpy(dtype=float)
+    weights    = window_df["weight"].to_numpy(dtype=float)
+    home_names = window_df["home_team"].to_numpy()
+    away_names = window_df["away_team"].to_numpy()
+
+    mu = (home_goals.sum() + away_goals.sum()) / (2 * n_games)
+    off = float(off_share)
+    deff = 1.0 - off
+
+    # 2 rows per match + 2 zero-sum constraint rows.
+    X = np.zeros((2 * n_games + 2, 2 * n_teams))
+    y = np.zeros(2 * n_games + 2)
+    w = np.zeros(2 * n_games + 2)
+
+    for i in range(n_games):
+        h = team_idx[home_names[i]]
+        a = team_idx[away_names[i]]
+        # home_O - away_D = home_goals - mu - hfa*off
+        X[2*i,     h]           =  1.0
+        X[2*i,     n_teams + a] = -1.0
+        y[2*i]                  = home_goals[i] - mu - hfa[i] * off
+        w[2*i]                  = weights[i]
+        # away_O - home_D = away_goals - mu + hfa*deff
+        X[2*i + 1, a]           =  1.0
+        X[2*i + 1, n_teams + h] = -1.0
+        y[2*i + 1]              = away_goals[i] - mu + hfa[i] * deff
+        w[2*i + 1]              = weights[i]
+
+    # Zero-sum on offense, then on defense.
+    X[-2, :n_teams] = 1.0
+    w[-2] = 1.0e8
+    X[-1, n_teams:] = 1.0
+    w[-1] = 1.0e8
+
+    sqrt_w = np.sqrt(w)
+    sol, *_ = np.linalg.lstsq(X * sqrt_w[:, None], y * sqrt_w, rcond=None)
+
+    return pd.DataFrame({
+        "name":     teams,
+        "rating_o": sol[:n_teams],
+        "rating_d": sol[n_teams:],
+    })
 
 
 def _confed_offset(cross_win, as_of_date, halflife_days):
@@ -846,6 +940,20 @@ for i in range(min_date_id, max_date_id + 1):
         if ranked['rating'].isna().any() or np.isinf(ranked['rating']).any():
             continue
 
+        # Offense/defense split on the same window, re-anchored so that
+        # rating_o + rating_d == the calibrated rating. delta is per team:
+        # adding it to both sides preserves the attack-vs-defense lean
+        # (rating_o - rating_d) from the raw solve while pinning the level to
+        # the calibrated rating, so the cap / shootout / pooling treatment
+        # flows through. sum(delta) = 0, so both vectors stay zero-sum.
+        ranked_od = _solve_wls_od(working_df, off_share=od_off_share, goal_cap=od_goal_cap)
+        ranked = ranked.merge(ranked_od, on='name', how='left')
+        delta = (ranked['rating'] - ranked['rating_o'] - ranked['rating_d']) / 2.0
+        ranked['rating_o'] = ranked['rating_o'] + delta
+        ranked['rating_d'] = ranked['rating_d'] + delta
+        ranked['rank_o'] = ranked['rating_o'].rank(ascending=False, method='min').astype(int)
+        ranked['rank_d'] = ranked['rating_d'].rank(ascending=False, method='min').astype(int)
+
         ranked['ranking_id']   = i
         ranked['ranking_date'] = current_date.date()
         ranked['season']       = season
@@ -1080,6 +1188,7 @@ final_df = final_df[[
     'ranking_id', 'date', 'year', 'country',
     'confederation',
     'rating', 'rank',
+    'rating_o', 'rank_o', 'rating_d', 'rank_d',
     'games_played', 'competitive_games_played',
     'last_match_date', 'last_match', 'is_game_day',
     'most_recent', 'is_world_cup_final_day',

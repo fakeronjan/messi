@@ -574,6 +574,10 @@ standings_data = {
             'flag':                country_flag(r['country']),
             'confederation':       clean(r['confederation']),
             'rating':              round(float(r['rating']), 3) if not pd.isna(r['rating']) else None,
+            'rating_o':            round(float(r['rating_o']), 3) if 'rating_o' in r and not pd.isna(r['rating_o']) else None,
+            'rating_d':            round(float(r['rating_d']), 3) if 'rating_d' in r and not pd.isna(r['rating_d']) else None,
+            'rank_o':              int(r['rank_o']) if 'rank_o' in r and not pd.isna(r['rank_o']) else None,
+            'rank_d':              int(r['rank_d']) if 'rank_d' in r and not pd.isna(r['rank_d']) else None,
             'games_played':        int(r['games_played']) if not pd.isna(r['games_played']) else 0,
             'last_match':          era_fix_lm(clean(r['last_match']), r['date']),
             'last_match_date':     clean(r['last_match_date']),
@@ -639,50 +643,65 @@ for _, row in _eligible_rows.iterrows():
         'tournament':    row['tournament'],
         'rating':  snap['rating'],
         'rank':    snap.get('rank'),
+        'rating_o': snap.get('rating_o'),
+        'rating_d': snap.get('rating_d'),
+        'rank_o':   snap.get('rank_o'),
+        'rank_d':   snap.get('rank_d'),
         'confederation': snap.get('confederation', ''),
         'games_played':  int(snap.get('games_played', 0)),
         'date':          final_date,
     })
 
 print(f"  GOAT candidate_records: {len(candidate_records)} (from {len(_eligible_rows)} eligible podium rows)")
+
+# Three GOAT views off the same medalist pool: overall rating, attack (rating_o),
+# and defense (rating_d). Every row carries all three values so the frontend can
+# show the offense/defense split and re-sort by metric; rank is positional to the
+# active sort. rating_o + rating_d sums to rating (the split is re-anchored to it).
+def _build_goat_table(records_df, sort_col):
+    tbl = (records_df.sort_values(sort_col, ascending=False)
+           .drop_duplicates(subset=['country', 'year'], keep='first')  # keep best if multi-tournament year
+           .head(50)
+           .reset_index(drop=True))
+    rows = []
+    for i, (_, r) in enumerate(tbl.iterrows()):
+        entry = {
+            'rank':                i + 1,
+            'team':                r['country'],
+            'flag':                country_flag(r['country']),
+            'confederation':       clean(r['confederation']),
+            'season':              int(r['year']),
+            'rating':              round(float(r['rating']), 3),
+            'rating_o':            round(float(r['rating_o']), 3) if not pd.isna(r['rating_o']) else None,
+            'rating_d':            round(float(r['rating_d']), 3) if not pd.isna(r['rating_d']) else None,
+            'rank_o':              int(r['rank_o']) if not pd.isna(r['rank_o']) else None,
+            'rank_d':              int(r['rank_d']) if not pd.isna(r['rank_d']) else None,
+            'tournament_finishes': country_year_finishes(r['country'], r['year']),
+            'continental_winner':  1 if (r['country'], int(r['year'])) in _continental_winners else 0,
+        }
+        era = display_name_at(r['country'], r['date'])
+        if era and era != r['country']:
+            entry['display_name'] = era
+        rows.append(entry)
+    return rows
+
+_goat_files = [('goat_teams.json', 'rating'), ('goat_teams_o.json', 'rating_o'), ('goat_teams_d.json', 'rating_d')]
 if not candidate_records:
-    # Defensive: empty candidates would crash sort_values. Emit empty goat_teams.json
+    # Defensive: empty candidates would crash sort_values. Emit empty files
     # and a diagnostic so we can investigate the underlying lookup failure.
-    print("  WARNING: candidate_records is empty. Writing empty goat_teams.json.")
+    print("  WARNING: candidate_records is empty. Writing empty goat_teams*.json.")
     print(f"  Diagnostic: df shape={df.shape}, df.columns={list(df.columns)}")
     print(f"  Sample df['date'] dtypes: {df['date'].head(3).tolist()}")
     print(f"  Sample _tournament_final_date_map values: {list(_tournament_final_date_map.values())[:3]}")
-    with open('docs/data/goat_teams.json', 'w') as f:
-        json.dump([], f)
-    eos_top = pd.DataFrame(columns=['country', 'year', 'tournament', 'rating', 'rank',
-                                     'confederation', 'games_played', 'date'])
+    for _fname, _ in _goat_files:
+        with open(f'docs/data/{_fname}', 'w') as f:
+            json.dump([], f)
 else:
-    eos_top = (
-        pd.DataFrame(candidate_records)
-        .sort_values('rating', ascending=False)
-        .drop_duplicates(subset=['country', 'year'], keep='first')  # keep highest if multi-tournament year
-        .head(50)
-        .reset_index(drop=True)
-    )
-
-goat_data = []
-for i, (_, r) in enumerate(eos_top.iterrows()):
-    entry = {
-        'rank':                i + 1,
-        'team':                r['country'],
-        'flag':                country_flag(r['country']),
-        'confederation':       clean(r['confederation']),
-        'season':              int(r['year']),
-        'rating':              round(float(r['rating']), 3),
-        'tournament_finishes': country_year_finishes(r['country'], r['year']),
-        'continental_winner':  1 if (r['country'], int(r['year'])) in _continental_winners else 0,
-    }
-    era = display_name_at(r['country'], r['date'])
-    if era and era != r['country']:
-        entry['display_name'] = era
-    goat_data.append(entry)
-with open('docs/data/goat_teams.json', 'w') as f:
-    json.dump(goat_data, f, separators=(',', ':'))
+    _records_df = pd.DataFrame(candidate_records)
+    for _fname, _sort_col in _goat_files:
+        payload = _build_goat_table(_records_df, _sort_col)
+        with open(f'docs/data/{_fname}', 'w') as f:
+            json.dump(payload, f, separators=(',', ':'))
 
 # ── 3. Per-team JSON files ───────────────────────────────────────────────────
 print("Writing per-team JSON files...")
@@ -840,6 +859,10 @@ for season in all_seasons:
                 'flag':                country_flag(r['country']),
                 'confederation':       clean(r['confederation']),
                 'rating':              round(float(r['rating']), 3) if not pd.isna(r['rating']) else None,
+                'rating_o':            round(float(r['rating_o']), 3) if 'rating_o' in r and not pd.isna(r['rating_o']) else None,
+                'rating_d':            round(float(r['rating_d']), 3) if 'rating_d' in r and not pd.isna(r['rating_d']) else None,
+                'rank_o':              int(r['rank_o']) if 'rank_o' in r and not pd.isna(r['rank_o']) else None,
+                'rank_d':              int(r['rank_d']) if 'rank_d' in r and not pd.isna(r['rank_d']) else None,
                 'last_match':          era_fix_lm(clean(r['last_match']), r['date']),
                 'last_match_date':     clean(r['last_match_date']),
                 'tournament_finishes': country_year_finishes(r['country'], r['year']),
