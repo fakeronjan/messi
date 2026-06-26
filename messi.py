@@ -1115,6 +1115,13 @@ final_df = messi_df.copy()
 final_df.rename(columns={'ranking_date': 'date'}, inplace=True)
 final_df['year'] = final_df['season'].fillna(0).astype(int)
 final_df['season'] = final_df['season'].astype('int64')   # ensure merge_asof key dtype matches lastmatch_df
+# Same for the 'name' merge_asof key. On a FULL rebuild messi_df is seeded from
+# an empty pd.DataFrame(columns=[...]) whose columns are object dtype, so
+# concatenating the str-dtype solver frames onto it downcasts 'name' to object.
+# lastmatch_df['name'] is str (read_csv under pandas-3 infer_string), and
+# merge_asof requires the 'by' keys to match exactly - so normalize to str.
+# (Incremental runs read messi_df from CSV, so 'name' is already str and match.)
+final_df['name'] = final_df['name'].astype(str)
 final_df['date'] = pd.to_datetime(final_df['date'])
 
 # Confederation
