@@ -466,8 +466,8 @@
 
 <!-- ── GOAT TABLE ───────────────────────────────────────────────────────── -->
 <div id="goat" class="tab">
-  <div class="league-pills" id="goat-conf-pills"></div>
   <div class="league-pills" id="goat-metric-pills"></div>
+  <div class="league-pills" id="goat-conf-pills"></div>
   <p class="data-note">Top 50 ratings, taken at the end of each major tournament. Eligibility requires winning a major continental trophy (or finishing 2nd in the FIFA World Cup) in that year. Data covers 1986 through the current year. OFF and DEF split each rating into attacking and defending strength, which sum back to Rating; the Offense and Defense tabs rank the best attacking and defending sides.</p>
   <div id="goat-table-wrap"><p class="loading">Loading GOAT table...</p></div>
 </div>
@@ -1167,6 +1167,8 @@ function renderTeamTable() {
     <td class="rank-cell">${g.rank != null ? g.rank : '-'}</td>
     <td class="rank-cell col-hide-mobile">${g.conf_rank != null ? g.conf_rank : '-'}</td>
     <td>${g.rank != null ? ratingBar(g.rating, _bs1) : '<span style="color:#bbb">-</span>'}</td>
+    <td class="od-cell col-hide-mobile">${fmtOD(g.rating_o, g.rank_o)}</td>
+    <td class="od-cell col-hide-mobile">${fmtOD(g.rating_d, g.rank_d)}</td>
     <td class="col-hide-mobile" style="font-size:11px">${confBadge(data.confederation, g.continental_winner)}</td>
     ${tsView === 'worldcup' ? '' : `<td class="col-hide-mobile" style="font-size:11px">${finishBadge(g.tournament_finishes)}</td>`}
   </tr>`;
@@ -1181,6 +1183,8 @@ function renderTeamTable() {
         ${tsView === 'worldcup' ? '<th>Group W-D-L <span style="font-weight:400;font-size:0.85em;opacity:0.7">(Pts)</span><div style="font-weight:400;font-size:0.82em;opacity:0.7;line-height:1.3;margin-top:1px">Knockout W-L (Pen W-L)</div></th>' : ''}
         <th class="col-num">OVR #</th><th class="col-hide-mobile col-num">Conf #</th>
         <th class="col-num">${tsView === 'worldcup' ? 'Final<br>Rating' : 'Rating'}</th>
+        <th class="col-hide-mobile col-num" title="Attacking strength: goals scored vs an average opponent. Sums with Defense to Rating.">OFF</th>
+        <th class="col-hide-mobile col-num" title="Defending strength: goals prevented vs an average opponent. Sums with Offense to Rating.">DEF</th>
         <th class="col-hide-mobile">Conf</th>
         ${tsView === 'worldcup' ? '' : '<th class="col-hide-mobile">Honors</th>'}
       </tr></thead>
@@ -1398,7 +1402,14 @@ function renderLeagueHistory(league) {
 
 // ── GOAT Table ────────────────────────────────────────────────────────────────
 const GOAT_METRIC_FILE = { overall: 'goat_teams.json', offense: 'goat_teams_o.json', defense: 'goat_teams_d.json' };
-const GOAT_RANK_LABEL  = { overall: 'All time rank', offense: 'Attack rank', defense: 'Defense rank' };
+// Fixed Rating / OFF / DEF column set. The active metric (the pill selection)
+// renders the value+bar; the other two render the compact value.
+const GOAT_METRICS = [
+  { field: 'rating',   label: 'Rating', title: '' },
+  { field: 'rating_o', label: 'OFF',    title: 'Attacking strength: goals scored vs an average opponent. Sums with Defense to Rating.' },
+  { field: 'rating_d', label: 'DEF',    title: 'Defending strength: goals prevented vs an average opponent. Sums with Offense to Rating.' },
+];
+const GOAT_FIELD = { overall: 'rating', offense: 'rating_o', defense: 'rating_d' };
 
 async function loadGoat() {
   if (goatCache[goatMetric]) { goatData = goatCache[goatMetric]; renderGoat(); return; }
@@ -1418,7 +1429,8 @@ function renderGoat() {
   let teams = goatData;
   if (goatConf !== 'all') teams = teams.filter(t => t.confederation === goatConf);
 
-  const _bs2 = barScale(teams.map(t => t.rating));
+  const activeField = GOAT_FIELD[goatMetric];
+  const _bs2 = barScale(teams.map(t => t[activeField]));
   const rows = teams.map(t => {
     const slug = nameToSlug[t.team];
     const cellInner = `<span style="margin-right:4px">${t.flag || ''}</span>${t.display_name || t.team}`;
@@ -1428,27 +1440,29 @@ function renderGoat() {
     // Carry the row team's confederation (or goatConf filter if set) to
     // Standings on year click. 'all' falls through to no override.
     const targetConf = (goatConf !== 'all' ? goatConf : t.confederation) || '';
+    // Active metric gets the value+bar; the other two render the compact value.
+    const metricCells = GOAT_METRICS.map(m => m.field === activeField
+      ? `<td class="od-cell">${ratingBar(t[m.field], _bs2)}</td>`
+      : `<td class="rating-cell od-cell col-hide-mobile">${fmtOD(t[m.field], null)}</td>`).join('');
     return `<tr>
     <td class="rank-cell">${t.rank}</td>
     <td class="season-cell linked" data-season-link="${t.season}" data-target-conf="${targetConf}" style="text-align:center;white-space:nowrap">${t.season}</td>
     ${teamTd}
     <td>${confederationBadge(t.confederation, !!t.continental_winner)}</td>
-    <td>${ratingBar(t.rating, _bs2)}</td>
-    <td class="od-cell col-hide-mobile">${fmtOD(t.rating_o, t.rank_o)}</td>
-    <td class="od-cell col-hide-mobile">${fmtOD(t.rating_d, t.rank_d)}</td>
+    ${metricCells}
     <td class="col-hide-mobile" style="font-size:11px">${finishBadge(t.tournament_finishes)}</td>
   </tr>`;
   }).join('');
 
+  const metricHeaders = GOAT_METRICS.map(m =>
+    `<th class="col-num${m.field === activeField ? '' : ' col-hide-mobile'}"${m.title ? ` title="${m.title}"` : ''}>${m.label}</th>`).join('');
   document.getElementById('goat-table-wrap').innerHTML = `
     <table>
       <thead><tr>
-        <th style="text-align:center">${GOAT_RANK_LABEL[goatMetric]}</th>
+        <th style="text-align:center">All time rank</th>
         <th style="text-align:center">Year</th>
         <th>Country</th><th>Conf</th>
-        <th class="col-num">Rating</th>
-        <th class="col-hide-mobile col-num" title="Attacking strength: goals scored vs an average opponent. Sums with Defense to Rating.">OFF</th>
-        <th class="col-hide-mobile col-num" title="Defending strength: goals prevented vs an average opponent. Sums with Offense to Rating.">DEF</th>
+        ${metricHeaders}
         <th class="col-hide-mobile">Honors</th>
       </tr></thead>
       <tbody>${rows}</tbody>
@@ -1540,9 +1554,9 @@ buildConfPills('goat-conf-pills', true, goatConf, v => {
   renderGoat();
 });
 buildPillsFromOpts('goat-metric-pills', [
-  { value: 'overall', label: 'Overall' },
-  { value: 'offense', label: 'Offense' },
-  { value: 'defense', label: 'Defense' },
+  { value: 'overall', label: 'Rating (overall)' },
+  { value: 'offense', label: 'Offense only' },
+  { value: 'defense', label: 'Defense only' },
 ], goatMetric, v => { goatMetric = v; loadGoat(); });
 const onHistoryPick = v => { historyTourny = v; renderLeagueHistory(v); };
 buildPillsFromOpts('history-world-pills',       HISTORY_WORLD,       historyTourny, onHistoryPick, ['history-continental-pills', 'history-nations-pills']);
