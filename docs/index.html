@@ -217,7 +217,6 @@
   .wc-bar-num { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 40px; text-align: right; }
   .wc-bar-track { flex: 1; height: 9px; min-width: 60px; background: #eee; border-radius: 5px; overflow: hidden; }
   .wc-bar-fill { height: 100%; background: #1a6b8a; border-radius: 5px; }
-  .wc-odds-table td.rating-cell { color: #555; }
   /* Knockout phase: eliminated teams fade out (kept for the bracket-tracker view). */
   .wc-odds-table tr.wc-elim { opacity: 0.4; }
   .wc-out { font-size: 11px; font-weight: 700; color: #b23; letter-spacing: 0.5px; text-transform: uppercase; }
@@ -1517,7 +1516,7 @@ function renderWcOdds() {
   // Bar scale off the strongest still-alive team so eliminated 0%s don't flatten it.
   const maxCh = Math.max(...teams.map(t => t.champ), 0.0001);
   const pc = v => (v * 100 >= 9.95 ? String(Math.round(v * 100)) : (v * 100).toFixed(1));
-  const cell = v => `<td class="col-num" style="font-variant-numeric:tabular-nums">${v >= 0.0005 ? pc(v) + '%' : '–'}</td>`;
+  const cell = v => `<td class="col-num" style="font-variant-numeric:tabular-nums">${v >= 0.0005 ? pc(v) + '%' : '<span style="color:#bbb">-</span>'}</td>`;
   const rows = teams.map((t, i) => {
     const slug = nameToSlug[t.team];
     const inner = `<span style="margin-right:5px">${t.flag || ''}</span>${t.team}`;
