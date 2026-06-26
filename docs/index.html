@@ -177,9 +177,9 @@
   }
   thead th.col-num { text-align: center; }
   /* Offense / Defense split: value above, rank below, centered like Rating. */
-  .od-cell { text-align: center; white-space: nowrap; }
-  .od-cell .rating-cell { font-weight: 600; }
-  .od-rank { font-size: 10px; color: #888; font-weight: 400; line-height: 1.2; }
+  .od-cell { text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .od-val { line-height: 1.15; font-variant-numeric: tabular-nums; }
+  .od-rank { line-height: 1.15; color: #888; font-weight: 500; font-size: 0.78em; font-variant-numeric: tabular-nums; margin-top: 1px; }
   .rating-bar-wrap {
     display: flex;
     flex-direction: column;
@@ -755,11 +755,12 @@ function ratingBar(rating, scaleMax) {
   </div>`;
 }
 
-// Offense / defense cell: rating on top, rank below. Both null-safe.
+// Offense / defense cell: value above, rank below (plain number, no '#'). Both null-safe.
 function fmtOD(val, rank) {
-  if (val == null) return '<span style="color:#bbb">-</span>';
-  const rk = rank != null ? `<div class="od-rank">#${rank}</div>` : '';
-  return `<span class="rating-cell">${val.toFixed(2)}</span>${rk}`;
+  if (val == null) return '-';
+  const v = val.toFixed(2);
+  if (rank == null) return v;
+  return `<div class="od-val">${v}</div><div class="od-rank">${rank}</div>`;
 }
 
 // ── Tab switching ────────────────────────────────────────────────────────────
