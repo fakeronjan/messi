@@ -1357,6 +1357,20 @@ if _nteams >= 4:
         wc_odds['n_sims'] = _NSIM
         wc_odds['games_left'] = _games_left
         wc_odds['phase'] = 'group' if not _group_done else 'knockout'
+        # The newest signal feeding this run: the most recent matchday's results,
+        # so the tab can show what just happened and on which date.
+        _done = _ed[_ed['home_score'].notna()]
+        if len(_done):
+            _last = _done['date'].max()
+            wc_odds['latest_matchday'] = {
+                'date': _last.strftime('%Y-%m-%d'),
+                'games': [{'home': _g['home_team'], 'away': _g['away_team'],
+                           'hg': int(_g['home_score']), 'ag': int(_g['away_score']),
+                           'hflag': country_flag(_g['home_team']), 'aflag': country_flag(_g['away_team']),
+                           'so': (_g['shootout_winner'] if isinstance(_g.get('shootout_winner'), str)
+                                  and _g['shootout_winner'].strip() else None)}
+                          for _, _g in _done[_done['date'] == _last].sort_values('home_team').iterrows()]
+            }
         print(f"  {_wc_year} WC ({wc_odds['phase']}): {_games_left} games to a champion, "
               f"{_NSIM:,} sims. Favorite: {wc_odds['teams'][0]['team']} "
               f"{wc_odds['teams'][0]['champ'] * 100:.1f}%")

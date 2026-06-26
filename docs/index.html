@@ -217,6 +217,13 @@
   /* Knockout phase: eliminated teams fade out (kept for the bracket-tracker view). */
   .wc-odds-table tr.wc-elim { opacity: 0.4; }
   .wc-out { font-size: 11px; font-weight: 700; color: #b23; letter-spacing: 0.5px; text-transform: uppercase; }
+  /* Run date + newest-matchday results strip. */
+  .wc-stamp { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin: 2px 0 14px; font-size: 12px; }
+  .wc-run { font-weight: 700; color: #1a6b8a; background: #eef5f8; border: 1px solid #cfe1e9; border-radius: 12px; padding: 2px 9px; }
+  .wc-md-label { font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px; }
+  .wc-result { color: #444; background: #f6f6f4; border: 1px solid #e6e6e2; border-radius: 12px; padding: 2px 9px; white-space: nowrap; }
+  .wc-result b { color: #111; }
+  .wc-so { color: #b23; font-size: 11px; }
 
   .finish-badge {
     font-size: 10px;
@@ -463,6 +470,7 @@
 <div id="wc-odds" class="tab">
   <h2 id="wc-odds-title" style="margin:4px 0 2px;font-size:18px"></h2>
   <p class="data-note" id="wc-odds-note"></p>
+  <div id="wc-odds-stamp" class="wc-stamp"></div>
   <div id="wc-odds-wrap"><p class="loading">Loading World Cup odds...</p></div>
 </div>
 
@@ -1447,6 +1455,22 @@ function renderWcOdds() {
     : `live knockout bracket · ${left} game${left === 1 ? '' : 's'} to a champion`;
   document.getElementById('wc-odds-note').textContent =
     `${sims} Monte Carlo simulations from current ratings · ${phaseTxt} · each column is the share of simulations a country reaches that stage`;
+
+  // Run date + the newest signal (latest matchday's results).
+  const niceDate = ds => new Date(ds + 'T00:00:00').toLocaleDateString('en-US',
+    { month: 'short', day: 'numeric', year: 'numeric' });
+  const stamp = document.getElementById('wc-odds-stamp');
+  let stampHtml = '';
+  if (wcOddsData.generated) stampHtml += `<span class="wc-run">Run ${niceDate(wcOddsData.generated)}</span>`;
+  const md = wcOddsData.latest_matchday;
+  if (md && md.games && md.games.length) {
+    const chips = md.games.map(g => {
+      const so = g.so ? ` <span class="wc-so">(${g.so} pens)</span>` : '';
+      return `<span class="wc-result">${g.hflag || ''} ${g.home} <b>${g.hg}-${g.ag}</b> ${g.away} ${g.aflag || ''}${so}</span>`;
+    }).join('');
+    stampHtml += `<span class="wc-md-label">Newest results · ${niceDate(md.date)}</span>${chips}`;
+  }
+  stamp.innerHTML = stampHtml;
 
   // Bar scale off the strongest still-alive team so eliminated 0%s don't flatten it.
   const maxCh = Math.max(...teams.map(t => t.champ), 0.0001);
