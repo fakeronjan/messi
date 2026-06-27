@@ -96,6 +96,37 @@ RECOMPUTE_TAIL_DAYS = 7
 data_url      = 'https://raw.githubusercontent.com/martj42/international_results/master/results.csv'
 shootouts_url = 'https://raw.githubusercontent.com/martj42/international_results/master/shootouts.csv'
 
+# ── Live-score overlay (football-data.org) ──────────────────────────────────
+# martj42 is the system of record (full breadth + all history) but lags match
+# days by 1-2 days while volunteers backfill scores. For an in-progress major
+# that football-data.org covers, we overlay its FINISHED scores onto martj42's
+# already-loaded fixture rows that still have empty scores. This ONLY fills
+# blanks - martj42 values are never overwritten - and is gated to recent unplayed
+# rows, so once a tournament finishes (and martj42 catches up) MESSI stops
+# calling the API entirely. That gate is also why a cancelled/free key is fine
+# off-tournament: no recent blanks -> no call. WC is football-data's free tier.
+FD_BASE = 'https://api.football-data.org/v4'
+# football-data competition code -> martj42 tournament name. Only the FINAL
+# tournament is covered (NOT qualifiers), and only these competitions exist on
+# the source. Add 'EC' -> 'UEFA Euro' in Euro years.
+FD_LIVE_COMPETITIONS = {
+    'WC': 'FIFA World Cup',
+}
+# football-data team name -> martj42 canonical name. Verified by diffing the two
+# sources' WC-2026 rosters (48 teams each, 4 divergences). Extend if a future
+# edition surfaces a new mismatch (the overlay logs any match it can't place).
+FD_TEAM_ALIASES = {
+    'Bosnia-Herzegovina': 'Bosnia and Herzegovina',
+    'Cape Verde Islands':  'Cape Verde',
+    'Congo DR':            'DR Congo',
+    'Czechia':             'Czech Republic',
+}
+# How far back a blank fixture can be and still trigger an API call. Keeps the
+# overlay scoped to an in-progress tournament; off-season there are no recent
+# blanks so no request is made.
+FD_OVERLAY_LOOKBACK_DAYS = 10
+FD_OVERLAY_LOOKAHEAD_DAYS = 3
+
 # ============================================================
 # TOURNAMENT CONFIGURATION
 # ============================================================
@@ -557,6 +588,127 @@ def _normalize_team_names(frame, cols):
             frame[c] = frame[c].replace(TEAM_NAME_NORMALIZATION)
     return frame
 
+
+def _fd_key():
+    """football-data.org key from env, falling back to zidane/.env (shared)."""
+    v = os.environ.get('FOOTBALL_DATA_KEY')
+    if v:
+        return v
+    env_path = os.path.expanduser('~/code/fakeronjan/sports/zidane/.env')
+    try:
+        with open(env_path) as f:
+            for line in f:
+                if line.startswith('FOOTBALL_DATA_KEY='):
+                    return line.split('=', 1)[1].strip()
+    except FileNotFoundError:
+        pass
+    return None
+
+
+def _overlay_live_scores(frame):
+    """Fill blank scores on in-progress major-tournament rows from football-data.org.
+
+    martj42 stays the system of record: this ONLY fills rows whose home/away
+    score is currently blank, never overwrites. Matches on the unordered team
+    pair within +/-1 day (martj42 dates by local match day, football-data by UTC
+    kickoff, so a late US night game can differ by a day) and writes the score in
+    each martj42 row's own home/away orientation. Any failure (no key, network,
+    rate limit, API change) is swallowed - the daily build must never break over
+    a best-effort overlay. Returns the (possibly) mutated frame.
+    """
+    import json
+    from urllib.request import Request, urlopen
+
+    today = pd.Timestamp('today').normalize()
+    lo = today - pd.Timedelta(days=FD_OVERLAY_LOOKBACK_DAYS)
+    hi = today + pd.Timedelta(days=FD_OVERLAY_LOOKAHEAD_DAYS)
+    blank = frame['home_score'].isna() | frame['away_score'].isna()
+
+    for code, tournament in FD_LIVE_COMPETITIONS.items():
+        # Gate: only call the API if martj42 has a recent unplayed row for this
+        # tournament. Off-season there are none, so no request is made (and a
+        # cancelled/free key never matters).
+        gap = blank & (frame['tournament'] == tournament) & \
+              (frame['date'] >= lo) & (frame['date'] <= hi)
+        if not gap.any():
+            continue
+
+        key = _fd_key()
+        if not key:
+            print(f"  Live overlay: {gap.sum()} blank {tournament} row(s) but no "
+                  f"FOOTBALL_DATA_KEY - skipping (martj42 will backfill).")
+            continue
+
+        try:
+            req = Request(f"{FD_BASE}/competitions/{code}/matches?status=FINISHED",
+                          headers={'X-Auth-Token': key})
+            with urlopen(req, timeout=30) as resp:
+                payload = json.loads(resp.read().decode('utf-8'))
+            matches = payload.get('matches', [])
+        except Exception as e:
+            print(f"  Live overlay: football-data.org fetch failed for {code} "
+                  f"({type(e).__name__}: {e}) - skipping, martj42 will backfill.")
+            continue
+
+        # Index this tournament's rows by unordered team pair: `blanks` are
+        # fillable (the strict [lo,hi] gap); `pair_seen` is every row across a
+        # window widened by the +/-1 day match tolerance, so we can tell a genuine
+        # gap (missing fixture / bad alias) apart from a game martj42 already has -
+        # the latter is fine and must not be flagged. The widening matches the FD
+        # date filter below so a boundary game martj42 already scored isn't a
+        # false alarm.
+        w_lo, w_hi = lo - pd.Timedelta(days=1), hi + pd.Timedelta(days=1)
+        window = (frame['tournament'] == tournament) & (frame['date'] >= w_lo) & (frame['date'] <= w_hi)
+        blanks, pair_seen = {}, set()
+        for i, r in frame.loc[window, ['date', 'home_team', 'away_team']].iterrows():
+            pk = frozenset((r['home_team'], r['away_team']))
+            pair_seen.add(pk)
+            if gap.at[i]:
+                blanks.setdefault(pk, []).append(i)
+
+        filled, unmatched, used = 0, [], set()
+        for m in matches:
+            ft = (m.get('score') or {}).get('fullTime') or {}
+            hs, as_ = ft.get('home'), ft.get('away')
+            if hs is None or as_ is None:
+                continue
+            fh = FD_TEAM_ALIASES.get(m['homeTeam']['name'], m['homeTeam']['name'])
+            fa = FD_TEAM_ALIASES.get(m['awayTeam']['name'], m['awayTeam']['name'])
+            fd_date = pd.Timestamp(m['utcDate'][:10])
+            # Ignore FD matches outside the active window (older editions/games
+            # martj42 long since has) - nothing to do, not a gap.
+            if fd_date < w_lo or fd_date > w_hi:
+                continue
+            pk = frozenset((fh, fa))
+
+            # Candidate blank rows for this pair, within +/-1 day of the UTC date,
+            # not already claimed by an earlier match of the same pairing.
+            cand = [i for i in blanks.get(pk, [])
+                    if i not in used and abs((frame.at[i, 'date'] - fd_date).days) <= 1]
+            if not cand:
+                # Flag a genuine gap only for a game squarely inside the fill
+                # window that martj42 has NO row for (missing fixture / bad alias).
+                # Games already scored (pair_seen) or sitting in the +/-1 day
+                # boundary margin are fine and stay quiet.
+                if pk not in pair_seen and lo <= fd_date <= hi:
+                    unmatched.append(f"{fh} {hs}-{as_} {fa} ({fd_date.date()})")
+                continue
+            i = cand[0]
+            used.add(i)
+            if frame.at[i, 'home_team'] == fh:
+                frame.at[i, 'home_score'], frame.at[i, 'away_score'] = hs, as_
+            else:  # martj42 row has teams in the opposite orientation
+                frame.at[i, 'home_score'], frame.at[i, 'away_score'] = as_, hs
+            filled += 1
+
+        print(f"  Live overlay [{tournament}]: filled {filled} blank score(s) "
+              f"from football-data.org ({gap.sum()} were blank).")
+        if unmatched:
+            print(f"  Live overlay [{tournament}]: {len(unmatched)} FINISHED match(es) "
+                  f"could NOT be placed (check FD_TEAM_ALIASES / dates): {unmatched}")
+    return frame
+
+
 print("Loading results from GitHub...")
 raw_df = pd.read_csv(data_url)
 shootouts_df = pd.read_csv(shootouts_url)
@@ -569,6 +721,13 @@ print(f"Shootouts loaded: {len(shootouts_df)} rows")
 
 raw_df['date'] = pd.to_datetime(raw_df['date'])
 shootouts_df['date'] = pd.to_datetime(shootouts_df['date'])
+
+# Best-effort live-score overlay for an in-progress major (see config above).
+# Wrapped so a bug or outage here can never fail the daily ratings build.
+try:
+    raw_df = _overlay_live_scores(raw_df)
+except Exception as e:
+    print(f"  Live overlay skipped ({type(e).__name__}: {e}) - using martj42 as-is.")
 
 # Date filter + drop U-23 events. Everything else (competitive + friendlies)
 # stays in the dataset - friendlies will get downweighted via WLS observation
