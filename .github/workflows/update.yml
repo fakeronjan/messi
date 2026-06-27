@@ -26,6 +26,12 @@ jobs:
 
       - name: Run ratings engine
         run: python messi.py
+        env:
+          # Live-score overlay for an in-progress major (e.g. World Cup): fills
+          # blank scores from football-data.org while martj42 backfills. Account-
+          # scoped key shared with the zidane/fantasy-world-cup repos. WC is on
+          # football-data's free tier; absent the key the overlay just no-ops.
+          FOOTBALL_DATA_KEY: ${{ secrets.FOOTBALL_DATA_KEY }}
 
       - name: Generate web data
         run: python generate_data.py
