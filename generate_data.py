@@ -1262,9 +1262,6 @@ if _nteams >= 4:
     _teams = sorted(_adj)
 
     _rng = np.random.default_rng(20260101)    # fixed seed: odds move with data, not MC noise
-    def _score(rh, ra, ha=0.0):
-        return (int(_rng.poisson(np.exp(GM_MU + GM_A * (rh - ra) + GM_B * ha))),
-                int(_rng.poisson(np.exp(GM_MU - GM_A * (rh - ra) - GM_B * ha))))
 
     def _base_table():
         tb = {t: {'pts': 0, 'gd': 0, 'gf': 0} for t in _teams}
@@ -1322,53 +1319,140 @@ if _nteams >= 4:
             blocks = newb; level += 1
         return blocks[0]['order'] if blocks else []
 
-    def _sim_ko(order, reach):
-        cur = list(order)
-        if len(cur) in _STAGE:
-            for t in cur: reach[t][_STAGE[len(cur)]] += 1
-        while len(cur) > 1:
-            nxt = []
-            for i in range(0, len(cur), 2):
-                a, b = cur[i], cur[i + 1]; k = frozenset({a, b})
-                if k in _played_win:
-                    w = _played_win[k]
-                else:
-                    gh, ga = _score(_cur[a], _cur[b])
-                    if gh > ga: w = a
-                    elif ga > gh: w = b
-                    else: w = a if _rng.random() < 1 / (1 + np.exp(-0.25 * (_cur[a] - _cur[b]))) else b
-                nxt.append(w)
-            cur = nxt
-            if len(cur) in _STAGE:
-                for w in cur: reach[w][_STAGE[len(cur)]] += 1
+    # ── Vectorized Monte Carlo ────────────────────────────────────────────────
+    # numpy-batched equivalent of the per-sim loops below (kept in git history):
+    # all NSIM sims advance together as array columns instead of a Python loop,
+    # cutting the in-tournament cost from ~8 min to seconds and letting NSIM go to
+    # 1e6 for a near-deterministic estimate. The MODEL is identical (same Poisson
+    # fit, same group tiebreaks, same rating-seeded bracket, same shootout logit);
+    # only the RNG draw order changes, so odds differ from the old loop solely by
+    # Monte-Carlo noise (validated to agree within ~3 standard errors).
+    _NSIM = 1_000_000
+    _CHUNK = 200_000          # cap peak memory; reach accumulates across chunks
+    _tlist = list(_teams)
+    _tix = {t: j for j, t in enumerate(_tlist)}
+    _NT = len(_tlist)
+    _ratv = np.array([_cur[t] for t in _tlist], float)
 
-    _NSIM = 20000
-    _reach = {t: {k: 0 for k in _KEYS} for t in _teams}
+    def _vec_ko(leaf, reach, played_pos):
+        """Vectorized single-elim KO. leaf: (n, L) team-col indices. reach: dict
+        stage -> (NT,) int64 counts (mutated). played_pos: {(round, pair): winner
+        col} for deterministic already-played games (empty during group stage)."""
+        cur = leaf
+        reach[_STAGE[cur.shape[1]]] += np.bincount(cur.ravel(), minlength=_NT)
+        rnd = 0
+        while cur.shape[1] > 1:
+            a = cur[:, 0::2]; b = cur[:, 1::2]                 # (n, L/2)
+            d = _ratv[a] - _ratv[b]
+            ga = _rng.poisson(np.exp(GM_MU + GM_A * d))        # neutral venue: ha=0
+            gb = _rng.poisson(np.exp(GM_MU - GM_A * d))
+            a_wins = np.where(ga == gb,
+                              _rng.random(d.shape) < 1.0 / (1.0 + np.exp(-0.25 * d)),
+                              ga > gb)
+            cur = np.where(a_wins, a, b)
+            for (pr, pj), wcol in played_pos.items():          # fix played results
+                if pr == rnd:
+                    cur[:, pj] = wcol
+            reach[_STAGE[cur.shape[1]]] += np.bincount(cur.ravel(), minlength=_NT)
+            rnd += 1
+
+    _reach_arr = {k: np.zeros(_NT, np.int64) for k in _KEYS}
     _group_done = len(_grp_unplayed) == 0 and len(_grp_played) > 0
     if _group_done:
         _quals_fixed = _qualifiers(_base_table())     # qualifiers fixed once groups end
         _order_fixed = _build_bracket(_quals_fixed)
-        for _ in range(_NSIM):
-            _sim_ko(_order_fixed, _reach)
+        # Walk the fixed bracket's deterministic prefix to map already-played games
+        # to (round, pair) so the vectorized KO can pin their winners.
+        _played_pos = {}
+        _det = list(_order_fixed); _r = 0
+        while len(_det) > 1:
+            _nd = []
+            for _j in range(0, len(_det), 2):
+                _x, _y = _det[_j], _det[_j + 1]
+                _k = frozenset({_x, _y}) if (_x is not None and _y is not None) else None
+                if _k is not None and _k in _played_win:
+                    _w = _played_win[_k]; _played_pos[(_r, _j // 2)] = _tix[_w]; _nd.append(_w)
+                else:
+                    _nd.append(None)
+            _det = _nd; _r += 1
+        _leaf0 = np.array([_tix[t] for t in _order_fixed], np.int32)
+        _done = 0
+        while _done < _NSIM:
+            _n = min(_CHUNK, _NSIM - _done)
+            _vec_ko(np.tile(_leaf0, (_n, 1)), _reach_arr, _played_pos)
+            _done += _n
         _alive = [t for t in _quals_fixed if t not in _eliminated]
         _in_progress = len(_alive) > 1
         _games_left = max(0, len(_alive) - 1)
         _qual_set = set(_quals_fixed)
     else:
-        for _ in range(_NSIM):
-            tb = {t: dict(v) for t, v in _base_table().items()}
-            for _, _g in _grp_unplayed.iterrows():
-                gh, ga = _score(_cur[_g['home_team']], _cur[_g['away_team']],
-                                0.0 if bool(_g.get('neutral')) else 1.0)
-                h, a = _g['home_team'], _g['away_team']
-                tb[h]['gf'] += gh; tb[h]['gd'] += gh - ga; tb[a]['gf'] += ga; tb[a]['gd'] += ga - gh
-                if gh > ga: tb[h]['pts'] += 3
-                elif gh < ga: tb[a]['pts'] += 3
-                else: tb[h]['pts'] += 1; tb[a]['pts'] += 1
-            _sim_ko(_build_bracket(_qualifiers(tb)), _reach)
+        # Group stage: vectorize group sim -> qualifiers -> rating-seed -> KO.
+        _bt = _base_table()
+        _base_pts = np.array([_bt[t]['pts'] for t in _tlist], np.int32)
+        _base_gd  = np.array([_bt[t]['gd']  for t in _tlist], np.int32)
+        _base_gf  = np.array([_bt[t]['gf']  for t in _tlist], np.int32)
+        _uh  = np.array([_tix[t] for t in _grp_unplayed['home_team']], int)
+        _ua  = np.array([_tix[t] for t in _grp_unplayed['away_team']], int)
+        _uha = np.array([0.0 if bool(x) else 1.0 for x in _grp_unplayed['neutral']])
+        _ud  = _ratv[_uh] - _ratv[_ua]
+        _ulam_h = np.exp(GM_MU + GM_A * _ud + GM_B * _uha)
+        _ulam_a = np.exp(GM_MU - GM_A * _ud - GM_B * _uha)
+        _ng = len(_grp_unplayed)
+        _grp_cols = [np.array([_tix[t] for t in gp]) for gp in _groups]
+        # rank -> bracket-leaf permutation, derived from _build_bracket so it
+        # matches the original seeding exactly (played dicts are empty mid-group).
+        _nq = len(_groups) * 2 + _n_thirds
+        assert _nq & (_nq - 1) == 0, f"vectorized KO needs power-of-2 bracket, got {_nq}"
+        _sample = sorted(_tlist, key=lambda t: _cur[t], reverse=True)[:_nq]
+        _seed_rank = {t: i for i, t in enumerate(_sample)}    # _sample already rating-desc
+        _P_perm = np.array([_seed_rank[t] for t in _build_bracket(_sample)])
+        assert sorted(_P_perm.tolist()) == list(range(_nq))
+        _ngrp = len(_groups)
+        _done = 0
+        while _done < _NSIM:
+            _n = min(_CHUNK, _NSIM - _done)
+            _pts = np.tile(_base_pts, (_n, 1))
+            _gd  = np.tile(_base_gd,  (_n, 1))
+            _gf  = np.tile(_base_gf,  (_n, 1))
+            for _g in range(_ng):
+                _gh = _rng.poisson(_ulam_h[_g], _n)
+                _ga = _rng.poisson(_ulam_a[_g], _n)
+                _h, _a = _uh[_g], _ua[_g]
+                _gf[:, _h] += _gh; _gd[:, _h] += _gh - _ga
+                _gf[:, _a] += _ga; _gd[:, _a] += _ga - _gh
+                _pts[:, _h] += np.where(_gh > _ga, 3, np.where(_gh == _ga, 1, 0))
+                _pts[:, _a] += np.where(_ga > _gh, 3, np.where(_gh == _ga, 1, 0))
+            _wins = np.empty((_n, _ngrp), np.int32)
+            _rus  = np.empty((_n, _ngrp), np.int32)
+            _thtm = np.empty((_n, _ngrp), np.int32)
+            _thky = np.empty((_n, _ngrp), np.float64)
+            _rows = np.arange(_n)
+            for _gi, _cols in enumerate(_grp_cols):
+                _P = _pts[:, _cols].astype(np.float64)
+                _G = _gd[:,  _cols].astype(np.float64)
+                _F = _gf[:,  _cols].astype(np.float64)
+                # composite sort key: pts >> gd >> gf >> uniform tiebreak (matches
+                # the original sorted(..., (pts, gd, gf, random()), reverse=True)).
+                _key = _P * 1e6 + _G * 1e3 + _F * 1e1 + _rng.random((_n, _cols.size))
+                _ordr = np.argsort(-_key, axis=1)
+                _wins[:, _gi] = _cols[_ordr[:, 0]]
+                _rus[:,  _gi] = _cols[_ordr[:, 1]]
+                _tp = _ordr[:, 2]
+                _thtm[:, _gi] = _cols[_tp]
+                _thky[:, _gi] = (_P[_rows, _tp] * 1e6 + _G[_rows, _tp] * 1e3
+                                 + _F[_rows, _tp] * 1e1 + _rng.random(_n))  # fresh tiebreak
+            _thord = np.argsort(-_thky, axis=1)
+            _bestth = np.take_along_axis(_thtm, _thord[:, :_n_thirds], axis=1)
+            _quals = np.concatenate([_wins, _rus, _bestth], axis=1)        # (n, nq)
+            _seed_order = np.argsort(-_ratv[_quals], axis=1, kind='stable')  # rating-seed
+            _seeds = np.take_along_axis(_quals, _seed_order, axis=1)
+            _vec_ko(_seeds[:, _P_perm].astype(np.int32), _reach_arr, {})
+            _done += _n
         _in_progress = True
         _games_left = len(_grp_unplayed)
         _qual_set = None
+
+    _reach = {t: {k: int(_reach_arr[k][_tix[t]]) for k in _KEYS} for t in _teams}
 
     if _in_progress and _teams:
         for _t in sorted(_teams, key=lambda t: (_reach[t]['champ'], _reach[t]['final'], _reach[t]['sf']),
