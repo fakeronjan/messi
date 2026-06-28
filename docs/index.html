@@ -223,11 +223,10 @@
   .bar-pos { background: #1a6b8a; }
   .bar-neg { background: #ff6eb4; }
 
-  /* World Cup win-probability bar (champion share). */
-  .wc-bar-wrap { display: flex; align-items: center; gap: 8px; }
-  .wc-bar-num { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 40px; text-align: right; }
-  .wc-bar-track { flex: 1; height: 9px; min-width: 60px; background: #eee; border-radius: 5px; overflow: hidden; }
-  .wc-bar-fill { height: 100%; background: #1a6b8a; border-radius: 5px; }
+  /* World Cup odds: per-column heat map (fleet colors: teal = high, pink = low). */
+  .wc-heat { text-align: center; font-variant-numeric: tabular-nums; font-weight: 600;
+             border: 2px solid #fff; color: #1f2937; }
+  .wc-champ-cell { font-weight: 800; }
   /* Knockout phase: eliminated teams fade out (kept for the bracket-tracker view). */
   .wc-odds-table tr.wc-elim { opacity: 0.4; }
   .wc-out { font-size: 11px; font-weight: 700; color: #b23; letter-spacing: 0.5px; text-transform: uppercase; }
@@ -1525,34 +1524,50 @@ function renderWcOdds() {
   }
   stamp.innerHTML = stampHtml;
 
-  // Bar scale off the strongest still-alive team so eliminated 0%s don't flatten it.
-  const maxCh = Math.max(...teams.map(t => t.champ), 0.0001);
   const pc = v => (v * 100 >= 9.95 ? String(Math.round(v * 100)) : (v * 100).toFixed(1));
-  const cell = v => `<td class="col-num" style="font-variant-numeric:tabular-nums">${v >= 0.0005 ? pc(v) + '%' : '<span style="color:#bbb">-</span>'}</td>`;
+  const pct = v => v * 100 < 0.05 ? '&lt;0.1%' : pc(v) + '%';
+  // Per-column heat map: each stage is normalized on its OWN min/max over still-
+  // alive teams, so colors compare like with like (champion share vs champion
+  // share, R16 vs R16) and never an R16 % against a final %. Fleet colors:
+  // teal (.bar-pos) = high, pink (.bar-neg) = low, white through the middle.
+  const STAGES = ['champ', 'final', 'sf', 'qf', 'r16'];
+  const alive = teams.filter(t => !t.eliminated);
+  const range = {};
+  STAGES.forEach(k => { const vs = alive.map(t => t[k]);
+    range[k] = [Math.min(...vs, Infinity), Math.max(...vs, -Infinity)]; });
+  const TEAL = [26, 107, 138], PINK = [255, 110, 180], MAXA = 0.70;
+  const heat = (v, [lo, hi]) => {
+    if (!isFinite(lo) || hi <= lo) return '#eef5f8';
+    const t = Math.max(0, Math.min(1, (v - lo) / (hi - lo)));     // 0 (pink) .. 1 (teal)
+    const [c, a] = t >= 0.5 ? [TEAL, (t - 0.5) * 2 * MAXA] : [PINK, (0.5 - t) * 2 * MAXA];
+    const mix = c.map(ch => Math.round(255 * (1 - a) + ch * a));
+    return `rgb(${mix[0]},${mix[1]},${mix[2]})`;
+  };
+  const heatCell = (t, k, cls = '') => t.eliminated
+    ? `<td class="col-num wc-heat ${cls}"><span style="color:#bbb">-</span></td>`
+    : `<td class="col-num wc-heat ${cls}" style="background:${heat(t[k], range[k])}">${pct(t[k])}</td>`;
   const rows = teams.map((t, i) => {
     const slug = nameToSlug[t.team];
     const inner = `<span style="margin-right:5px">${t.flag || ''}</span>${t.team}`;
     const teamTd = slug
       ? `<td class="team-cell linked" data-team-slug="${slug}">${inner}</td>`
       : `<td class="team-cell">${inner}</td>`;
-    const w = (t.champ / maxCh) * 100;
     const champCell = t.eliminated
-      ? `<span class="wc-out">out</span>`
-      : `<div class="wc-bar-wrap"><span class="wc-bar-num">${pc(t.champ)}%</span>`
-        + `<div class="wc-bar-track"><div class="wc-bar-fill" style="width:${w.toFixed(1)}%"></div></div></div>`;
+      ? `<td class="col-num wc-heat wc-champ-cell"><span class="wc-out">out</span></td>`
+      : `<td class="col-num wc-heat wc-champ-cell" style="background:${heat(t.champ, range.champ)}">${pct(t.champ)}</td>`;
     return `<tr class="${t.eliminated ? 'wc-elim' : ''}">
       <td class="rank-cell">${i + 1}</td>
       ${teamTd}
       <td class="col-num rating-cell">${t.rating.toFixed(2)}</td>
-      <td>${champCell}</td>
-      ${cell(t.final)}${cell(t.sf)}${cell(t.qf)}${cell(t.r16)}
+      ${champCell}
+      ${heatCell(t, 'final')}${heatCell(t, 'sf')}${heatCell(t, 'qf')}${heatCell(t, 'r16')}
     </tr>`;
   }).join('');
   document.getElementById('wc-odds-wrap').innerHTML = `<table class="wc-odds-table">
     <thead><tr>
       <th style="text-align:center">Rank</th><th>Country</th>
       <th class="col-num">Rating</th>
-      <th style="min-width:130px">Champion 🏆</th>
+      <th class="col-num" style="min-width:64px">Champion 🏆</th>
       <th class="col-num">Final</th><th class="col-num">Semis</th>
       <th class="col-num col-hide-mobile">Quarters</th><th class="col-num col-hide-mobile">R16</th>
     </tr></thead><tbody>${rows}</tbody></table>`;
