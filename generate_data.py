@@ -1319,6 +1319,45 @@ if _nteams >= 4:
             blocks = newb; level += 1
         return blocks[0]['order'] if blocks else []
 
+    # ── Known knockout brackets ───────────────────────────────────────────────
+    # The feed carries the real R32 matchups (as scheduled fixtures) but NOT the
+    # bracket TREE: which R32 winner meets which in R16 -> ... -> final. FIFA fixes
+    # that template before the knockouts, so we encode it per edition as the 16 R32
+    # ties in bracket-leaf order (top of bracket to bottom). Adjacent pairs are the
+    # R16 ties, pairs-of-pairs the QFs, and so on up the binary tree. Source: FIFA
+    # official 2026 bracket (M73-88 -> 89-96 -> 97-100 -> 101-102 -> 104). When the
+    # edition is listed and every team has qualified, this replaces the rating-
+    # seeded fallback so the sim follows the ACTUAL path to the trophy; otherwise it
+    # degrades to the 1-v-N seeding. Played KO results are still pinned afterward
+    # (the _played_pos walk reads _order_fixed regardless of how it was built).
+    WC_KNOWN_BRACKETS = {
+        2026: [  # leaf order: M74,M77,M73,M75,M83,M84,M81,M82,M76,M78,M79,M80,M86,M88,M85,M87
+            ('Germany', 'Paraguay'),       ('France', 'Sweden'),
+            ('South Africa', 'Canada'),    ('Netherlands', 'Morocco'),
+            ('Portugal', 'Croatia'),       ('Spain', 'Austria'),
+            ('United States', 'Bosnia and Herzegovina'), ('Belgium', 'Senegal'),
+            ('Brazil', 'Japan'),           ('Ivory Coast', 'Norway'),
+            ('Mexico', 'Ecuador'),         ('England', 'DR Congo'),
+            ('Argentina', 'Cape Verde'),   ('Australia', 'Egypt'),
+            ('Switzerland', 'Algeria'),    ('Colombia', 'Ghana'),
+        ],
+    }
+
+    def _known_bracket_order(year, present):
+        """Flat 32-team leaf order for `year`'s real bracket, or None to fall back.
+        Returns None (with a warning) unless every listed team is present, so a data
+        hiccup or alias drift never silently simulates the wrong bracket."""
+        ties = WC_KNOWN_BRACKETS.get(year)
+        if not ties:
+            return None
+        leaves = [t for tie in ties for t in tie]
+        missing = sorted(t for t in leaves if t not in present)
+        if missing:
+            print(f"  Known {year} bracket skipped: teams absent from data {missing} "
+                  f"- falling back to rating-seeded bracket.")
+            return None
+        return leaves
+
     # ── Vectorized Monte Carlo ────────────────────────────────────────────────
     # numpy-batched equivalent of the per-sim loops below (kept in git history):
     # all NSIM sims advance together as array columns instead of a Python loop,
@@ -1359,8 +1398,17 @@ if _nteams >= 4:
     _reach_arr = {k: np.zeros(_NT, np.int64) for k in _KEYS}
     _group_done = len(_grp_unplayed) == 0 and len(_grp_played) > 0
     if _group_done:
-        _quals_fixed = _qualifiers(_base_table())     # qualifiers fixed once groups end
-        _order_fixed = _build_bracket(_quals_fixed)
+        # Prefer the real FIFA bracket tree once groups end; the 32 leaf teams ARE
+        # the qualifiers (ground truth), so we skip the thirds-tiebreak guesswork.
+        _known = _known_bracket_order(_wc_year, set(_teams))
+        if _known is not None:
+            _order_fixed = _known
+            _quals_fixed = _known
+            print(f"  Using real {_wc_year} bracket tree from FIFA template "
+                  f"(actual R32 matchups, not rating-seeded).")
+        else:
+            _quals_fixed = _qualifiers(_base_table())   # qualifiers fixed once groups end
+            _order_fixed = _build_bracket(_quals_fixed)
         # Walk the fixed bracket's deterministic prefix to map already-played games
         # to (round, pair) so the vectorized KO can pin their winners.
         _played_pos = {}
