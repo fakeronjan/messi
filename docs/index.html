@@ -224,6 +224,8 @@
   .bar-neg { background: #ff6eb4; }
 
   /* World Cup odds: per-column heat map (fleet colors: teal = high, pink = low). */
+  /* Equal-width round columns. */
+  .wc-heat, .wc-odds-table th.wc-col { width: 74px; padding-left: 7px; padding-right: 7px; }
   .wc-heat { text-align: center; font-variant-numeric: tabular-nums; font-weight: 600;
              border: 2px solid #fff; color: #1f2937; }
   .wc-champ-cell { font-weight: 800; }
@@ -1524,8 +1526,7 @@ function renderWcOdds() {
   }
   stamp.innerHTML = stampHtml;
 
-  const pc = v => (v * 100 >= 9.95 ? String(Math.round(v * 100)) : (v * 100).toFixed(1));
-  const pct = v => v * 100 < 0.05 ? '&lt;0.1%' : pc(v) + '%';
+  const pct = v => v * 100 < 1 ? '&lt;1%' : Math.round(v * 100) + '%';
   // Per-column heat map: each stage is normalized on its OWN min/max over still-
   // alive teams, so colors compare like with like (champion share vs champion
   // share, R16 vs R16) and never an R16 % against a final %. Fleet colors:
@@ -1567,9 +1568,9 @@ function renderWcOdds() {
     <thead><tr>
       <th style="text-align:center">Rank</th><th>Country</th>
       <th class="col-num">Rating</th>
-      <th class="col-num col-hide-mobile">R16</th><th class="col-num col-hide-mobile">Quarters</th>
-      <th class="col-num">Semis</th><th class="col-num">Final</th>
-      <th class="col-num" style="min-width:64px">Champion 🏆</th>
+      <th class="col-num wc-col col-hide-mobile">R16</th><th class="col-num wc-col col-hide-mobile">QF</th>
+      <th class="col-num wc-col">SF</th><th class="col-num wc-col">Final</th>
+      <th class="col-num wc-col">Champ 🏆</th>
     </tr></thead><tbody>${rows}</tbody></table>`;
   attachLinks();
 }
