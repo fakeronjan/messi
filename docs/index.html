@@ -233,6 +233,7 @@
   .wc-results { white-space: nowrap; font-size: 12px; }
   .wc-grp { display: inline-block; font-weight: 700; color: #1a6b8a; background: #eef5f8;
             border-radius: 4px; padding: 1px 5px; font-size: 11px; font-variant-numeric: tabular-nums; }
+  .wc-rec { color: #888; font-size: 11px; margin-left: 3px; font-variant-numeric: tabular-nums; }
   .wc-vs { color: #555; }
   .wc-w { color: #1a6b8a; font-weight: 700; }
   .wc-l { color: #c2306b; font-weight: 700; }
@@ -1557,7 +1558,9 @@ function renderWcOdds() {
     : `<td class="col-num wc-heat ${cls}" style="background:${heat(t[k], range[k])}">${pct(t[k])}</td>`;
   // Results column: group finish tag (e.g. A1) + R32 opponent (pending) or result (played).
   const resultsCell = t => {
-    const grp = t.grp ? `<span class="wc-grp">${t.grp}</span>` : '';
+    const grp = t.grp
+      ? `<span class="wc-grp">${t.grp}</span>${t.grp_rec ? `<span class="wc-rec">(${t.grp_rec})</span>` : ''}`
+      : '';
     let r32 = '';
     if (t.r32_gf != null) {
       const pens = t.r32_pens ? ' p' : '';

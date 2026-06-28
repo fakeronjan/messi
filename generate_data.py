@@ -1458,6 +1458,14 @@ if _nteams >= 4:
         _qual_set = set(_quals_fixed)
         # Results-column data: group finish (validated draw + live feed standings),
         # plus each qualifier's R32 opponent and played result.
+        _grp_rec = {}                          # team -> [W, D, L] in the group stage
+        for _, _g in _grp_played.iterrows():
+            _h, _a = _g['home_team'], _g['away_team']
+            _hs, _gas = int(_g['home_score']), int(_g['away_score'])
+            _grp_rec.setdefault(_h, [0, 0, 0]); _grp_rec.setdefault(_a, [0, 0, 0])
+            if _hs > _gas: _grp_rec[_h][0] += 1; _grp_rec[_a][2] += 1
+            elif _hs < _gas: _grp_rec[_h][2] += 1; _grp_rec[_a][0] += 1
+            else: _grp_rec[_h][1] += 1; _grp_rec[_a][1] += 1
         _rosters = WC_GROUP_ROSTERS.get(_wc_year, {})
         _clique_sets = {frozenset(gp) for gp in _groups}
         if _rosters and len(_rosters) == len(_groups) and all(
@@ -1560,6 +1568,8 @@ if _nteams >= 4:
             }
             if _t in _grpfin:
                 _entry['grp'] = _grpfin[_t]
+            if _t in _grp_rec:
+                _entry['grp_rec'] = '%d-%d-%d' % tuple(_grp_rec[_t])
             if _t in _r32_opp:
                 _opp = _r32_opp[_t]
                 _entry['r32_opp'] = _opp
