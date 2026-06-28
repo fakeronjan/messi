@@ -1343,6 +1343,28 @@ if _nteams >= 4:
         ],
     }
 
+    # Official group-stage draw (rosters only), for the Results column's "group +
+    # finish" tag (A1, H2, K3...). Positions are NOT read from here - they're
+    # computed live from the feed standings - so this is only the A-L membership,
+    # validated against the feed's own cliques before use; a mismatch (e.g. a team-
+    # name alias drift) skips the labels rather than mislabeling.
+    WC_GROUP_ROSTERS = {
+        2026: {
+            'A': ['Mexico', 'South Africa', 'South Korea', 'Czech Republic'],
+            'B': ['Switzerland', 'Canada', 'Bosnia and Herzegovina', 'Qatar'],
+            'C': ['Brazil', 'Morocco', 'Scotland', 'Haiti'],
+            'D': ['United States', 'Australia', 'Paraguay', 'Turkey'],
+            'E': ['Germany', 'Ivory Coast', 'Ecuador', 'Curaçao'],
+            'F': ['Netherlands', 'Japan', 'Sweden', 'Tunisia'],
+            'G': ['Belgium', 'Egypt', 'Iran', 'New Zealand'],
+            'H': ['Spain', 'Cape Verde', 'Uruguay', 'Saudi Arabia'],
+            'I': ['France', 'Norway', 'Senegal', 'Iraq'],
+            'J': ['Argentina', 'Austria', 'Algeria', 'Jordan'],
+            'K': ['Colombia', 'Portugal', 'DR Congo', 'Uzbekistan'],
+            'L': ['England', 'Croatia', 'Ghana', 'Panama'],
+        },
+    }
+
     def _known_bracket_order(year, present):
         """Flat 32-team leaf order for `year`'s real bracket, or None to fall back.
         Returns None (with a warning) unless every listed team is present, so a data
@@ -1396,6 +1418,7 @@ if _nteams >= 4:
             rnd += 1
 
     _reach_arr = {k: np.zeros(_NT, np.int64) for k in _KEYS}
+    _grpfin, _r32_opp, _ko_score = {}, {}, {}   # Results-column data (filled once groups end)
     _group_done = len(_grp_unplayed) == 0 and len(_grp_played) > 0
     if _group_done:
         # Prefer the real FIFA bracket tree once groups end; the 32 leaf teams ARE
@@ -1433,6 +1456,28 @@ if _nteams >= 4:
         _in_progress = len(_alive) > 1
         _games_left = max(0, len(_alive) - 1)
         _qual_set = set(_quals_fixed)
+        # Results-column data: group finish (validated draw + live feed standings),
+        # plus each qualifier's R32 opponent and played result.
+        _rosters = WC_GROUP_ROSTERS.get(_wc_year, {})
+        _clique_sets = {frozenset(gp) for gp in _groups}
+        if _rosters and len(_rosters) == len(_groups) and all(
+                frozenset(ts) in _clique_sets for ts in _rosters.values()):
+            _tb_fin = _base_table()
+            for _L, _ts in _rosters.items():
+                for _p, _t in enumerate(sorted(_ts, key=lambda t: (
+                        _tb_fin[t]['pts'], _tb_fin[t]['gd'], _tb_fin[t]['gf']), reverse=True), 1):
+                    _grpfin[_t] = f"{_L}{_p}"
+        elif _rosters:
+            print(f"  {_wc_year} group rosters don't match feed cliques - no group labels.")
+        if _known is not None:               # real R32 matchups (opponent per team)
+            for _j in range(0, len(_order_fixed), 2):
+                _a, _b = _order_fixed[_j], _order_fixed[_j + 1]
+                _r32_opp[_a] = _b; _r32_opp[_b] = _a
+        for _, _g in _ko[_ko['home_score'].notna()].iterrows():   # played KO scores
+            _ko_score[frozenset({_g['home_team'], _g['away_team']})] = (
+                _g['home_team'], int(_g['home_score']), int(_g['away_score']),
+                _g['shootout_winner'] if isinstance(_g.get('shootout_winner'), str)
+                and _g['shootout_winner'].strip() else None)
     else:
         # Group stage: vectorize group sim -> qualifiers -> rating-seed -> KO.
         _bt = _base_table()
@@ -1507,12 +1552,28 @@ if _nteams >= 4:
                          reverse=True):
             _r = _reach[_t]
             _elim = (_t in _eliminated) or (_qual_set is not None and _t not in _qual_set)
-            wc_odds['teams'].append({
+            _entry = {
                 'team': _t, 'flag': country_flag(_t), 'rating': round(float(_cur[_t]), 2),
                 'group': _gidx[_t], 'eliminated': bool(_elim),
                 'champ': _r['champ'] / _NSIM, 'final': _r['final'] / _NSIM, 'sf': _r['sf'] / _NSIM,
                 'qf': _r['qf'] / _NSIM, 'r16': _r['r16'] / _NSIM, 'r32': _r['r32'] / _NSIM,
-            })
+            }
+            if _t in _grpfin:
+                _entry['grp'] = _grpfin[_t]
+            if _t in _r32_opp:
+                _opp = _r32_opp[_t]
+                _entry['r32_opp'] = _opp
+                _entry['r32_opp_flag'] = country_flag(_opp)
+                _sc = _ko_score.get(frozenset({_t, _opp}))
+                if _sc is not None:
+                    _ht, _hs, _as, _so = _sc
+                    _gf_t, _ga_t = (_hs, _as) if _ht == _t else (_as, _hs)
+                    _entry['r32_gf'] = _gf_t
+                    _entry['r32_ga'] = _ga_t
+                    _entry['r32_won'] = (_gf_t > _ga_t) or (_gf_t == _ga_t and _so == _t)
+                    if _so:
+                        _entry['r32_pens'] = True
+            wc_odds['teams'].append(_entry)
         wc_odds['n_sims'] = _NSIM
         wc_odds['games_left'] = _games_left
         wc_odds['phase'] = 'group' if not _group_done else 'knockout'

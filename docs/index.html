@@ -229,6 +229,14 @@
   .wc-heat { text-align: center; font-variant-numeric: tabular-nums; font-weight: 600;
              border: 2px solid #fff; color: #1f2937; }
   .wc-champ-cell { font-weight: 800; }
+  /* Results column: group finish tag + R32 opponent/result. */
+  .wc-results { white-space: nowrap; font-size: 12px; }
+  .wc-grp { display: inline-block; font-weight: 700; color: #1a6b8a; background: #eef5f8;
+            border-radius: 4px; padding: 1px 5px; font-size: 11px; font-variant-numeric: tabular-nums; }
+  .wc-vs { color: #555; }
+  .wc-w { color: #1a6b8a; font-weight: 700; }
+  .wc-l { color: #c2306b; font-weight: 700; }
+  .wc-sep { color: #ccc; margin: 0 2px; }
   /* Knockout phase: eliminated teams fade out (kept for the bracket-tracker view). */
   .wc-odds-table tr.wc-elim { opacity: 0.4; }
   .wc-out { font-size: 11px; font-weight: 700; color: #b23; letter-spacing: 0.5px; text-transform: uppercase; }
@@ -1547,6 +1555,20 @@ function renderWcOdds() {
   const heatCell = (t, k, cls = '') => t.eliminated
     ? `<td class="col-num wc-heat ${cls}"><span style="color:#bbb">-</span></td>`
     : `<td class="col-num wc-heat ${cls}" style="background:${heat(t[k], range[k])}">${pct(t[k])}</td>`;
+  // Results column: group finish tag (e.g. A1) + R32 opponent (pending) or result (played).
+  const resultsCell = t => {
+    const grp = t.grp ? `<span class="wc-grp">${t.grp}</span>` : '';
+    let r32 = '';
+    if (t.r32_gf != null) {
+      const pens = t.r32_pens ? ' p' : '';
+      r32 = `<span class="${t.r32_won ? 'wc-w' : 'wc-l'}">${t.r32_won ? 'W' : 'L'} ${t.r32_gf}-${t.r32_ga}${pens}</span>`;
+    } else if (t.r32_opp) {
+      r32 = `<span class="wc-vs">vs ${t.r32_opp_flag || ''} ${t.r32_opp}</span>`;
+    }
+    const sep = grp && r32 ? '<span class="wc-sep">·</span>' : '';
+    const body = `${grp}${sep}${r32}` || '<span style="color:#bbb">-</span>';
+    return `<td class="wc-results">${body}</td>`;
+  };
   const rows = teams.map((t, i) => {
     const slug = nameToSlug[t.team];
     const inner = `<span style="margin-right:5px">${t.flag || ''}</span>${t.team}`;
@@ -1560,6 +1582,7 @@ function renderWcOdds() {
       <td class="rank-cell">${i + 1}</td>
       ${teamTd}
       <td class="col-num rating-cell">${t.rating.toFixed(2)}</td>
+      ${resultsCell(t)}
       ${heatCell(t, 'r16', 'col-hide-mobile')}${heatCell(t, 'qf', 'col-hide-mobile')}${heatCell(t, 'sf')}${heatCell(t, 'final')}
       ${champCell}
     </tr>`;
@@ -1568,6 +1591,7 @@ function renderWcOdds() {
     <thead><tr>
       <th style="text-align:center">Rank</th><th>Country</th>
       <th class="col-num">Rating</th>
+      <th>Results</th>
       <th class="col-num wc-col col-hide-mobile">R16</th><th class="col-num wc-col col-hide-mobile">QF</th>
       <th class="col-num wc-col">SF</th><th class="col-num wc-col">Final</th>
       <th class="col-num wc-col">Champ 🏆</th>
