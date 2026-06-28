@@ -34568,7 +34568,7 @@ date,home_team,away_team,home_score,away_score,tournament,city,country,neutral,s
 2026-06-27,Algeria,Austria,3.0,3.0,FIFA World Cup,Kansas City,United States,True,,0.0,-0.0,0.0,-0.0,0.0,0.0,-0.0,competitive,1.0,2.0,0.5,0.5,CAF,UEFA,8828,
 2026-06-27,Colombia,Portugal,0.0,0.0,FIFA World Cup,Miami Gardens,United States,True,,0.0,-0.0,0.0,-0.0,0.0,0.0,-0.0,competitive,1.0,2.0,0.5,0.5,CONMEBOL,UEFA,8828,
 2026-06-27,DR Congo,Uzbekistan,3.0,1.0,FIFA World Cup,Atlanta,United States,True,,2.0,-2.0,2.0,-2.0,0.0,2.0,-2.0,competitive,1.0,2.0,1.0,0.0,CAF,AFC,8828,
-2026-06-28,South Africa,Canada,,,FIFA World Cup,Inglewood,United States,True,,,,,,0.0,,,competitive,1.0,2.0,0.0,1.0,CAF,CONCACAF,8829,
+2026-06-28,South Africa,Canada,0.0,1.0,FIFA World Cup,Inglewood,United States,True,,-1.0,1.0,-1.0,1.0,0.0,-1.0,1.0,competitive,1.0,2.0,0.0,1.0,CAF,CONCACAF,8829,
 2026-06-29,Brazil,Japan,,,FIFA World Cup,Houston,United States,True,,,,,,0.0,,,competitive,1.0,2.0,0.0,1.0,CONMEBOL,AFC,8830,
 2026-06-29,Germany,Paraguay,,,FIFA World Cup,Foxborough,United States,True,,,,,,0.0,,,competitive,1.0,2.0,0.0,1.0,UEFA,CONMEBOL,8830,
 2026-06-29,Netherlands,Morocco,,,FIFA World Cup,Guadalupe,Mexico,True,,,,,,0.0,,,competitive,1.0,2.0,0.0,1.0,UEFA,CAF,8830,
