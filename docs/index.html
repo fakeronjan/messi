@@ -1559,17 +1559,17 @@ function renderWcOdds() {
       <td class="rank-cell">${i + 1}</td>
       ${teamTd}
       <td class="col-num rating-cell">${t.rating.toFixed(2)}</td>
+      ${heatCell(t, 'r16', 'col-hide-mobile')}${heatCell(t, 'qf', 'col-hide-mobile')}${heatCell(t, 'sf')}${heatCell(t, 'final')}
       ${champCell}
-      ${heatCell(t, 'final')}${heatCell(t, 'sf')}${heatCell(t, 'qf')}${heatCell(t, 'r16')}
     </tr>`;
   }).join('');
   document.getElementById('wc-odds-wrap').innerHTML = `<table class="wc-odds-table">
     <thead><tr>
       <th style="text-align:center">Rank</th><th>Country</th>
       <th class="col-num">Rating</th>
+      <th class="col-num col-hide-mobile">R16</th><th class="col-num col-hide-mobile">Quarters</th>
+      <th class="col-num">Semis</th><th class="col-num">Final</th>
       <th class="col-num" style="min-width:64px">Champion 🏆</th>
-      <th class="col-num">Final</th><th class="col-num">Semis</th>
-      <th class="col-num col-hide-mobile">Quarters</th><th class="col-num col-hide-mobile">R16</th>
     </tr></thead><tbody>${rows}</tbody></table>`;
   attachLinks();
 }
