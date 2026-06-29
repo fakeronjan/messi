@@ -1418,7 +1418,8 @@ if _nteams >= 4:
             rnd += 1
 
     _reach_arr = {k: np.zeros(_NT, np.int64) for k in _KEYS}
-    _grpfin, _r32_opp, _ko_score = {}, {}, {}   # Results-column data (filled once groups end)
+    _grpfin, _ko_score = {}, {}                  # Results-column data (filled once groups end)
+    _ko_path = {}                               # team -> ordered knockout path (all rounds)
     _group_done = len(_grp_unplayed) == 0 and len(_grp_played) > 0
     if _group_done:
         # Prefer the real FIFA bracket tree once groups end; the 32 leaf teams ARE
@@ -1477,15 +1478,42 @@ if _nteams >= 4:
                     _grpfin[_t] = f"{_L}{_p}"
         elif _rosters:
             print(f"  {_wc_year} group rosters don't match feed cliques - no group labels.")
-        if _known is not None:               # real R32 matchups (opponent per team)
-            for _j in range(0, len(_order_fixed), 2):
-                _a, _b = _order_fixed[_j], _order_fixed[_j + 1]
-                _r32_opp[_a] = _b; _r32_opp[_b] = _a
         for _, _g in _ko[_ko['home_score'].notna()].iterrows():   # played KO scores
             _ko_score[frozenset({_g['home_team'], _g['away_team']})] = (
                 _g['home_team'], int(_g['home_score']), int(_g['away_score']),
                 _g['shootout_winner'] if isinstance(_g.get('shootout_winner'), str)
                 and _g['shootout_winner'].strip() else None)
+        # Each team's full knockout PATH: every round played (opponent + score +
+        # W/L), plus the immediate pending matchup once both sides are known.
+        # Walked off the fixed bracket tree, generalizing the old R32-only logic.
+        _KO_ROUND_LABELS = ['R32', 'R16', 'QF', 'SF', 'Final']
+        _walk = list(_order_fixed); _ri = 0
+        while len(_walk) > 1:
+            _lbl = _KO_ROUND_LABELS[_ri] if _ri < len(_KO_ROUND_LABELS) else 'R%d' % len(_walk)
+            _next = []
+            for _j in range(0, len(_walk), 2):
+                _x, _y = _walk[_j], _walk[_j + 1]
+                _k = frozenset({_x, _y}) if (_x is not None and _y is not None) else None
+                _sc = _ko_score.get(_k) if _k is not None else None
+                if _sc is not None:                       # played: record for both sides
+                    _ht, _hs, _as, _so = _sc
+                    for _tt, _opp in ((_x, _y), (_y, _x)):
+                        _gf, _ga = (_hs, _as) if _ht == _tt else (_as, _hs)
+                        _step = {'round': _lbl, 'opp': _opp, 'opp_flag': country_flag(_opp),
+                                 'gf': _gf, 'ga': _ga,
+                                 'won': (_gf > _ga) or (_gf == _ga and _so == _tt)}
+                        if _so:
+                            _step['pens'] = True
+                        _ko_path.setdefault(_tt, []).append(_step)
+                    _next.append(_played_win.get(_k))
+                else:                                     # not yet played
+                    if _k is not None:                    # both sides known: pending matchup
+                        for _tt, _opp in ((_x, _y), (_y, _x)):
+                            _ko_path.setdefault(_tt, []).append(
+                                {'round': _lbl, 'opp': _opp,
+                                 'opp_flag': country_flag(_opp), 'pending': True})
+                    _next.append(None)
+            _walk = _next; _ri += 1
     else:
         # Group stage: vectorize group sim -> qualifiers -> rating-seed -> KO.
         _bt = _base_table()
@@ -1570,19 +1598,8 @@ if _nteams >= 4:
                 _entry['grp'] = _grpfin[_t]
             if _t in _grp_rec:
                 _entry['grp_rec'] = '%d-%d-%d' % tuple(_grp_rec[_t])
-            if _t in _r32_opp:
-                _opp = _r32_opp[_t]
-                _entry['r32_opp'] = _opp
-                _entry['r32_opp_flag'] = country_flag(_opp)
-                _sc = _ko_score.get(frozenset({_t, _opp}))
-                if _sc is not None:
-                    _ht, _hs, _as, _so = _sc
-                    _gf_t, _ga_t = (_hs, _as) if _ht == _t else (_as, _hs)
-                    _entry['r32_gf'] = _gf_t
-                    _entry['r32_ga'] = _ga_t
-                    _entry['r32_won'] = (_gf_t > _ga_t) or (_gf_t == _ga_t and _so == _t)
-                    if _so:
-                        _entry['r32_pens'] = True
+            if _t in _ko_path:
+                _entry['ko_path'] = _ko_path[_t]
             wc_odds['teams'].append(_entry)
         wc_odds['n_sims'] = _NSIM
         wc_odds['games_left'] = _games_left
