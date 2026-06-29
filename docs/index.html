@@ -1494,6 +1494,7 @@ function renderGoat() {
 let wcOddsData = null;   // current/live odds (richest: latest_matchday, n_sims)
 let wcHistory = null;    // {tournaments:[{tournament, edition, snapshots:[...]}]}
 let wcViewKey = null;    // selected snapshot's "phase-games_left" key; null = latest/live
+let wcSelectedEdition = null;  // selected edition (null = the live / most-recent one)
 async function loadWcOdds() {
   try {
     const res = await fetch(`${BASE}/wc_odds.json`);
@@ -1506,12 +1507,16 @@ async function loadWcOdds() {
   renderWcOdds();
 }
 
-// Snapshots for the edition currently shown (matches the live odds' edition).
+// Snapshots for the edition currently shown (the selected one, else the live edition).
 function wcEditionBucket() {
   if (!wcHistory || !wcHistory.tournaments) return null;
-  const ed = wcOddsData && wcOddsData.edition;
+  const ed = wcSelectedEdition != null ? wcSelectedEdition : (wcOddsData && wcOddsData.edition);
   return wcHistory.tournaments.find(b => b.edition === ed)
-      || wcHistory.tournaments[wcHistory.tournaments.length - 1] || null;
+      || wcHistory.tournaments[0] || null;
+}
+function wcIsLiveEdition() {
+  const b = wcEditionBucket();
+  return !!(b && wcOddsData && b.edition === wcOddsData.edition);
 }
 function wcSnapKey(s) { return `${s.phase}-${s.games_left}`; }
 // Stage label for a snapshot: group games left, or the knockout round in play
@@ -1534,28 +1539,39 @@ function wcBuildControls() {
   const tourSel = document.getElementById('wc-tournament-select');
   const dateSel = document.getElementById('wc-date-select');
   if (!ctr || !dateSel) return;
-  if (tourSel && wcHistory && wcHistory.tournaments) {
+  const buckets = (wcHistory && wcHistory.tournaments) || [];
+  const bucket = wcEditionBucket();
+  if (tourSel) {
     tourSel.innerHTML = '';
-    wcHistory.tournaments.forEach(b => {
+    buckets.forEach(b => {
       const o = document.createElement('option');
-      o.value = `${b.tournament}|${b.edition}`;
+      o.value = String(b.edition);
       o.textContent = `${b.edition} ${b.tournament}`;
       tourSel.appendChild(o);
     });
-    tourSel.style.display = wcHistory.tournaments.length > 1 ? '' : 'none';
+    if (bucket) tourSel.value = String(bucket.edition);
+    tourSel.style.display = buckets.length > 1 ? '' : 'none';
+    tourSel.onchange = () => {
+      wcSelectedEdition = parseInt(tourSel.value, 10);
+      wcViewKey = null;            // reset to the latest state of the chosen edition
+      wcBuildControls();
+      renderWcView();
+    };
   }
-  const snaps = (wcEditionBucket() || {}).snapshots || [];
-  if (snaps.length <= 1) { ctr.style.display = 'none'; return; }   // nothing to scrub yet
-  ctr.style.display = '';
+  const snaps = (bucket || {}).snapshots || [];
+  ctr.style.display = (snaps.length > 1 || buckets.length > 1) ? '' : 'none';
+  const live = wcIsLiveEdition();
   dateSel.innerHTML = '';
   // Newest game-state first (fleet date-dropdown standard).
   [...snaps].reverse().forEach((s, i) => {
     const o = document.createElement('option');
-    o.value = (i === 0) ? '' : wcSnapKey(s);     // newest === current/live
-    o.textContent = `${s.date} | ${wcStageLabel(s)}${i === 0 ? ' · current' : ''}`;
+    o.value = (i === 0 && live) ? '' : wcSnapKey(s);   // live edition's newest === live odds
+    o.textContent = `${s.date} | ${wcStageLabel(s)}${i === 0 && live ? ' · current' : ''}`;
     dateSel.appendChild(o);
   });
-  dateSel.value = wcViewKey || '';
+  // Default: live -> '' (live odds); past edition -> its newest (Champion) snapshot.
+  dateSel.value = wcViewKey != null ? wcViewKey
+    : (live ? '' : (snaps.length ? wcSnapKey(snaps[snaps.length - 1]) : ''));
   dateSel.onchange = () => { wcViewKey = dateSel.value || null; renderWcView(); };
 }
 
@@ -1583,12 +1599,23 @@ function renderWcOdds() {
 // rows, so a past date renders identically to live.
 function renderWcView() {
   const bucket = wcEditionBucket();
-  const snap = (wcViewKey != null && bucket)
-    ? bucket.snapshots.find(s => wcSnapKey(s) === wcViewKey) : null;
-  const view = snap || wcOddsData;
-  const isLatest = !snap;
+  const snaps = (bucket || {}).snapshots || [];
+  const live = wcIsLiveEdition();
+  let view, isLatest;
+  if (wcViewKey != null) {
+    view = snaps.find(s => wcSnapKey(s) === wcViewKey) || (live ? wcOddsData : snaps[snaps.length - 1]);
+    isLatest = false;
+  } else {
+    // latest: live edition -> live odds; past edition -> newest (Champion) snapshot
+    view = live ? wcOddsData : (snaps[snaps.length - 1] || wcOddsData);
+    isLatest = true;
+  }
   const teams = (view && view.teams) || [];
   if (!teams.length) return;
+  // 16-team-knockout editions (1986-2022) start at R16, so the R16 column is a
+  // trivial 100% - hide it. 48-team editions (R32 round) keep it.
+  const koSize = Math.max(0, (view.games_left || 0) + 1, ...snaps.map(s => (s.games_left || 0) + 1));
+  const showR16 = koSize > 16;
 
   const niceDate = ds => new Date(ds + 'T00:00:00').toLocaleDateString('en-US',
     { month: 'short', day: 'numeric', year: 'numeric' });
@@ -1721,7 +1748,7 @@ function renderWcView() {
       ${teamTd}
       <td class="col-num rating-cell od-cell">${fmtOD(t.rating, t.rank)}</td>
       ${resultsCell(t)}
-      ${heatCell(t, 'r16', 'col-hide-mobile')}${heatCell(t, 'qf', 'col-hide-mobile')}${heatCell(t, 'sf')}${heatCell(t, 'final')}
+      ${showR16 ? heatCell(t, 'r16', 'col-hide-mobile') : ''}${heatCell(t, 'qf', 'col-hide-mobile')}${heatCell(t, 'sf')}${heatCell(t, 'final')}
       ${champCell(t)}
     </tr>`;
   }).join('');
@@ -1730,7 +1757,7 @@ function renderWcView() {
       <th style="text-align:center">🏆 Rank</th><th>Country</th>
       <th class="col-num">Rating</th>
       <th>Results</th>
-      <th class="col-num wc-col col-hide-mobile">R16</th><th class="col-num wc-col col-hide-mobile">QF</th>
+      ${showR16 ? '<th class="col-num wc-col col-hide-mobile">R16</th>' : ''}<th class="col-num wc-col col-hide-mobile">QF</th>
       <th class="col-num wc-col">SF</th><th class="col-num wc-col">Final</th>
       <th class="col-num wc-col">Champ 🏆</th>
     </tr></thead><tbody>${rows}</tbody></table>`;
