@@ -238,6 +238,7 @@
   .wc-vs { color: #555; }
   .wc-w { color: #1a6b8a; font-weight: 700; }
   .wc-l { color: #c2306b; font-weight: 700; }
+  .wc-heat .wc-wl { font-size: 13px; font-weight: 800; }
   .wc-sep { color: #ccc; margin: 0 2px; }
   /* Knockout phase: eliminated teams fade out (kept for the bracket-tracker view). */
   .wc-odds-table tr.wc-elim { opacity: 0.6; }
@@ -1543,10 +1544,33 @@ function renderWcOdds() {
   // alive teams, so colors compare like with like (champion share vs champion
   // share, R16 vs R16) and never an R16 % against a final %. Fleet colors:
   // teal (.bar-pos) = high, pink (.bar-neg) = low, white through the middle.
+  // Per-team knockout results mapped onto the probability columns: a decided
+  // game fixes the NEXT round's cell to certain (W) or impossible (L), so show
+  // W/L there instead of 100%/0%. R32 result -> R16 column, ..., Final -> Champ.
+  const KO_COL = { R32: 'r16', R16: 'qf', QF: 'sf', SF: 'final', Final: 'champ' };
+  teams.forEach(t => {
+    const kr = {};
+    (t.ko_path || []).forEach(k => {
+      if (k.pending) return;
+      const col = KO_COL[k.round];
+      if (col) kr[col] = k.won ? 'W' : 'L';
+    });
+    t._kr = kr;
+    t._depth = (t.ko_path || []).filter(k => !k.pending).length;   // knockout rounds reached
+  });
+  // Sort: still-active teams first by championship odds; then eliminated teams
+  // by how far they advanced (deepest round reached first), rating as the
+  // tiebreak - cascading down round by round.
+  const ordered = teams.slice().sort((a, b) =>
+    (!a.eliminated !== !b.eliminated) ? (a.eliminated ? 1 : -1)
+    : !a.eliminated ? (b.champ - a.champ)
+    : (b._depth - a._depth) || (b.rating - a.rating));
+
   const STAGES = ['champ', 'final', 'sf', 'qf', 'r16'];
   const alive = teams.filter(t => !t.eliminated);
   const range = {};
-  STAGES.forEach(k => { const vs = alive.map(t => t[k]);
+  // Exclude decided cells (shown as W/L) so the color scale spans live odds only.
+  STAGES.forEach(k => { const vs = alive.filter(t => !t._kr[k]).map(t => t[k]);
     range[k] = [Math.min(...vs, Infinity), Math.max(...vs, -Infinity)]; });
   const TEAL = [26, 107, 138], PINK = [255, 110, 180], MAXA = 0.70;
   const heat = (v, [lo, hi]) => {
@@ -1556,7 +1580,11 @@ function renderWcOdds() {
     const mix = c.map(ch => Math.round(255 * (1 - a) + ch * a));
     return `rgb(${mix[0]},${mix[1]},${mix[2]})`;
   };
-  const heatCell = (t, k, cls = '') => t.eliminated
+  const wlCell = (r, cls = '') =>
+    `<td class="col-num wc-heat ${cls}"><span class="${r === 'W' ? 'wc-w' : 'wc-l'} wc-wl">${r}</span></td>`;
+  const heatCell = (t, k, cls = '') => t._kr[k]
+    ? wlCell(t._kr[k], cls)
+    : t.eliminated
     ? `<td class="col-num wc-heat ${cls}"><span style="color:#bbb">-</span></td>`
     : `<td class="col-num wc-heat ${cls}" style="background:${heat(t[k], range[k])}">${pct(t[k])}</td>`;
   // Results column: group finish tag (e.g. A1) + the full knockout path - every
@@ -1581,22 +1609,24 @@ function renderWcOdds() {
       : '<span style="color:#bbb">-</span>';
     return `<td class="wc-results">${body}</td>`;
   };
-  const rows = teams.map((t, i) => {
+  const champCell = t => t._kr.champ
+    ? `<td class="col-num wc-heat wc-champ-cell"><span class="${t._kr.champ === 'W' ? 'wc-w' : 'wc-l'} wc-wl">${t._kr.champ}</span></td>`
+    : t.eliminated
+    ? `<td class="col-num wc-heat wc-champ-cell"><span class="wc-out">out</span></td>`
+    : `<td class="col-num wc-heat wc-champ-cell" style="background:${heat(t.champ, range.champ)}">${pct(t.champ)}</td>`;
+  const rows = ordered.map((t, i) => {
     const slug = nameToSlug[t.team];
     const inner = `<span style="margin-right:5px">${t.flag || ''}</span>${t.team}`;
     const teamTd = slug
       ? `<td class="team-cell linked" data-team-slug="${slug}">${inner}</td>`
       : `<td class="team-cell">${inner}</td>`;
-    const champCell = t.eliminated
-      ? `<td class="col-num wc-heat wc-champ-cell"><span class="wc-out">out</span></td>`
-      : `<td class="col-num wc-heat wc-champ-cell" style="background:${heat(t.champ, range.champ)}">${pct(t.champ)}</td>`;
     return `<tr class="${t.eliminated ? 'wc-elim' : ''}">
       <td class="rank-cell">${i + 1}</td>
       ${teamTd}
       <td class="col-num rating-cell">${t.rating.toFixed(2)}</td>
       ${resultsCell(t)}
       ${heatCell(t, 'r16', 'col-hide-mobile')}${heatCell(t, 'qf', 'col-hide-mobile')}${heatCell(t, 'sf')}${heatCell(t, 'final')}
-      ${champCell}
+      ${champCell(t)}
     </tr>`;
   }).join('');
   document.getElementById('wc-odds-wrap').innerHTML = `<table class="wc-odds-table">
