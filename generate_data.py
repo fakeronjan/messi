@@ -1484,6 +1484,8 @@ if _nteams >= 4:
                 _g['home_team'], int(_g['home_score']), int(_g['away_score']),
                 _g['shootout_winner'] if isinstance(_g.get('shootout_winner'), str)
                 and _g['shootout_winner'].strip() else None)
+        _ko_date = {frozenset({_g['home_team'], _g['away_team']}): str(_g['date'])[:10]
+                    for _, _g in _ko.iterrows()}   # scheduled date of every KO fixture (played or not)
         # Each team's full knockout PATH: every round played (opponent + score +
         # W/L), plus the immediate pending matchup once both sides are known.
         # Walked off the fixed bracket tree, generalizing the old R32-only logic.
@@ -1509,10 +1511,13 @@ if _nteams >= 4:
                     _next.append(_played_win.get(_k))
                 else:                                     # not yet played
                     if _k is not None:                    # both sides known: pending matchup
+                        _pdate = _ko_date.get(_k)
                         for _tt, _opp in ((_x, _y), (_y, _x)):
-                            _ko_path.setdefault(_tt, []).append(
-                                {'round': _lbl, 'opp': _opp,
-                                 'opp_flag': country_flag(_opp), 'pending': True})
+                            _pe = {'round': _lbl, 'opp': _opp,
+                                   'opp_flag': country_flag(_opp), 'pending': True}
+                            if _pdate:
+                                _pe['date'] = _pdate
+                            _ko_path.setdefault(_tt, []).append(_pe)
                     _next.append(None)
             _walk = _next; _ri += 1
     else:

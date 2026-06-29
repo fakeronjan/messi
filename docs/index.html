@@ -235,6 +235,7 @@
   .wc-conf-CAF      { background: #e7edf6; color: #3a6499; }
   .wc-conf-OFC      { background: #ededed; color: #666;    }
   .wc-vs { color: #555; }
+  .wc-when { color: #999; font-variant-numeric: tabular-nums; }
   .wc-w { color: #1a6b8a; font-weight: 700; }
   .wc-l { color: #c2306b; font-weight: 700; }
   .wc-heat .wc-wl { font-size: 13px; font-weight: 800; }
@@ -1690,7 +1691,8 @@ function renderWcView() {
       const rd = `<span class="wc-rd">${k.round}</span>`;
       const opp = `<span class="wc-vs">vs. ${k.opp_flag || ''} ${k.opp}</span>`;
       if (k.pending) {
-        parts.push(`${rd} ${opp}`);
+        const when = k.date ? ` <span class="wc-when">(${k.date.slice(5)})</span>` : '';
+        parts.push(`${rd} ${opp}${when}`);
       } else {
         const pens = k.pens ? ' p' : '';
         parts.push(`${rd} <span class="${k.won ? 'wc-w' : 'wc-l'}">${k.won ? 'W' : 'L'} ${k.gf}-${k.ga}${pens}</span> ${opp}`);
