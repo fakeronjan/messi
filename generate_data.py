@@ -1638,8 +1638,12 @@ with open('docs/data/wc_odds.json', 'w') as f:
     json.dump(wc_odds, f, separators=(',', ':'))
 
 
+WC_HISTORY_TOURNAMENT = 'FIFA World Cup'   # MESSI's odds engine covers the WC finals
+
+
 def _wc_history_snapshot(wc):
-    """Compact per-run odds snapshot for the history time-series."""
+    """Self-contained per-game-state snapshot: the full team rows (so a historical
+    date renders identically to live) plus the state metadata."""
     _ts = wc.get('teams', [])
     if not _ts:
         return None
@@ -1647,17 +1651,18 @@ def _wc_history_snapshot(wc):
         'date': wc.get('generated'),
         'phase': wc.get('phase', 'group') or 'group',
         'games_left': wc.get('games_left'),
-        'teams': {_t['team']: {_k: round(_t[_k], 4) for _k in ('r16', 'qf', 'sf', 'final', 'champ')}
-                  for _t in _ts},
+        'complete': bool(wc.get('complete')),
+        'teams': _ts,
     }
 
 
 def _append_wc_history(wc, path='docs/data/wc_odds_history.json'):
-    """Append a snapshot of the WC odds, so we can see how they shifted over the
-    tournament. De-duped by game-state (phase + games_left): every played game
-    changes games_left, so a re-run of the same state refreshes in place while
-    each new result appends a fresh snapshot. (Both full-R32 and post-first-game
-    states fall on the same calendar day, so date is NOT a safe key.)"""
+    """Append a snapshot to the odds-history time-series. Namespaced by
+    (tournament, edition) so a tournament/date selector can scrub any edition;
+    de-duped within an edition by game-state (phase + games_left). Every played
+    game changes games_left, so a re-run of the same state refreshes in place
+    while each new result appends. Date is NOT a safe key - the full-R32 forecast
+    and the first knockout result fall on the same calendar day."""
     _snap = _wc_history_snapshot(wc)
     if _snap is None:
         return
@@ -1665,9 +1670,15 @@ def _append_wc_history(wc, path='docs/data/wc_odds_history.json'):
         with open(path) as f:
             _hist = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        _hist = {'edition': wc.get('edition'), 'snapshots': []}
-    _hist['edition'] = wc.get('edition')
-    _snaps = _hist.setdefault('snapshots', [])
+        _hist = {'tournaments': []}
+    _ed = wc.get('edition')
+    _buckets = _hist.setdefault('tournaments', [])
+    _bucket = next((_b for _b in _buckets
+                    if _b.get('tournament') == WC_HISTORY_TOURNAMENT and _b.get('edition') == _ed), None)
+    if _bucket is None:
+        _bucket = {'tournament': WC_HISTORY_TOURNAMENT, 'edition': _ed, 'snapshots': []}
+        _buckets.append(_bucket)
+    _snaps = _bucket.setdefault('snapshots', [])
     _key = (_snap['phase'], _snap['games_left'])
     for _i, _s in enumerate(_snaps):
         if (_s.get('phase'), _s.get('games_left')) == _key:
@@ -1677,7 +1688,7 @@ def _append_wc_history(wc, path='docs/data/wc_odds_history.json'):
         _snaps.append(_snap)
     with open(path, 'w') as f:
         json.dump(_hist, f, separators=(',', ':'))
-    print(f"  WC odds history: {len(_snaps)} snapshots "
+    print(f"  WC odds history: {WC_HISTORY_TOURNAMENT} {_ed} -> {len(_snaps)} snapshots "
           f"(latest: {_snap['phase']} games_left={_snap['games_left']}).")
 
 

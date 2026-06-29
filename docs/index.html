@@ -499,6 +499,10 @@
 <div id="wc-odds" class="tab">
   <h2 id="wc-odds-title" style="margin:4px 0 2px;font-size:18px"></h2>
   <p class="data-note" id="wc-odds-note"></p>
+  <div class="controls" id="wc-controls" style="display:none">
+    <select id="wc-tournament-select" style="display:none"></select>
+    <select id="wc-date-select" style="min-width:220px"></select>
+  </div>
   <div id="wc-odds-stamp" class="wc-stamp"></div>
   <div id="wc-odds-wrap"><p class="loading">Loading World Cup odds...</p></div>
 </div>
@@ -1499,13 +1503,72 @@ function renderGoat() {
 }
 
 // ── World Cup win-probability odds ───────────────────────────────────────────
-let wcOddsData = null;
+let wcOddsData = null;   // current/live odds (richest: latest_matchday, n_sims)
+let wcHistory = null;    // {tournaments:[{tournament, edition, snapshots:[...]}]}
+let wcViewKey = null;    // selected snapshot's "phase-games_left" key; null = latest/live
 async function loadWcOdds() {
   try {
     const res = await fetch(`${BASE}/wc_odds.json`);
     wcOddsData = await res.json();
   } catch(e) { wcOddsData = null; }
+  try {
+    const res = await fetch(`${BASE}/wc_odds_history.json`);
+    wcHistory = await res.json();
+  } catch(e) { wcHistory = null; }
   renderWcOdds();
+}
+
+// Snapshots for the edition currently shown (matches the live odds' edition).
+function wcEditionBucket() {
+  if (!wcHistory || !wcHistory.tournaments) return null;
+  const ed = wcOddsData && wcOddsData.edition;
+  return wcHistory.tournaments.find(b => b.edition === ed)
+      || wcHistory.tournaments[wcHistory.tournaments.length - 1] || null;
+}
+function wcSnapKey(s) { return `${s.phase}-${s.games_left}`; }
+// Stage label for a snapshot: group games left, or the knockout round in play
+// (alive = games_left + 1 teams), or Champion once decided.
+function wcStageLabel(s) {
+  if (!s) return '';
+  if (s.phase === 'group') return `${s.games_left} group game${s.games_left === 1 ? '' : 's'} left`;
+  if (s.complete || s.games_left === 0) return 'Champion';
+  const alive = s.games_left + 1;
+  if (alive > 16) return 'Round of 32';
+  if (alive > 8)  return 'Round of 16';
+  if (alive > 4)  return 'Quarterfinals';
+  if (alive > 2)  return 'Semifinals';
+  return 'Final';
+}
+
+// Build the tournament (plumbed, hidden until >1 edition) + date selectors.
+function wcBuildControls() {
+  const ctr = document.getElementById('wc-controls');
+  const tourSel = document.getElementById('wc-tournament-select');
+  const dateSel = document.getElementById('wc-date-select');
+  if (!ctr || !dateSel) return;
+  if (tourSel && wcHistory && wcHistory.tournaments) {
+    tourSel.innerHTML = '';
+    wcHistory.tournaments.forEach(b => {
+      const o = document.createElement('option');
+      o.value = `${b.tournament}|${b.edition}`;
+      o.textContent = `${b.edition} ${b.tournament}`;
+      tourSel.appendChild(o);
+    });
+    tourSel.style.display = wcHistory.tournaments.length > 1 ? '' : 'none';
+  }
+  const snaps = (wcEditionBucket() || {}).snapshots || [];
+  if (snaps.length <= 1) { ctr.style.display = 'none'; return; }   // nothing to scrub yet
+  ctr.style.display = '';
+  dateSel.innerHTML = '';
+  // Newest game-state first (fleet date-dropdown standard).
+  [...snaps].reverse().forEach((s, i) => {
+    const o = document.createElement('option');
+    o.value = (i === 0) ? '' : wcSnapKey(s);     // newest === current/live
+    o.textContent = `${s.date} | ${wcStageLabel(s)}${i === 0 ? ' · current' : ''}`;
+    dateSel.appendChild(o);
+  });
+  dateSel.value = wcViewKey || '';
+  dateSel.onchange = () => { wcViewKey = dateSel.value || null; renderWcView(); };
 }
 
 function renderWcOdds() {
@@ -1523,37 +1586,60 @@ function renderWcOdds() {
     document.getElementById('wc-odds').classList.add('active');
   }
 
-  const complete = !!wcOddsData.complete;
+  wcBuildControls();
+  renderWcView();
+}
+
+// Render the table + header for the currently selected view: live odds, or a
+// historical snapshot picked from the date dropdown. Snapshots carry full team
+// rows, so a past date renders identically to live.
+function renderWcView() {
+  const bucket = wcEditionBucket();
+  const snap = (wcViewKey != null && bucket)
+    ? bucket.snapshots.find(s => wcSnapKey(s) === wcViewKey) : null;
+  const view = snap || wcOddsData;
+  const isLatest = !snap;
+  const teams = (view && view.teams) || [];
+  if (!teams.length) return;
+
+  const niceDate = ds => new Date(ds + 'T00:00:00').toLocaleDateString('en-US',
+    { month: 'short', day: 'numeric', year: 'numeric' });
+  const complete = !!view.complete;
   const winner = complete ? (teams.find(t => !t.eliminated) || teams[0]) : null;
+  const left = view.games_left;
+  const phase = view.phase || 'group';
+  const sims = (view.n_sims || (wcOddsData && wcOddsData.n_sims) || 0).toLocaleString();
+
   document.getElementById('wc-odds-title').textContent =
-    `${wcOddsData.edition} FIFA World Cup 🏆 ${complete ? 'Final Results' : 'Win Probability'}`;
-  const sims = (wcOddsData.n_sims || 0).toLocaleString();
-  const left = wcOddsData.games_left;
-  const phase = wcOddsData.phase || 'group';
+    `${view.edition} FIFA World Cup 🏆 ${complete ? 'Final Results' : 'Win Probability'}`;
+  let note;
   if (complete) {
-    document.getElementById('wc-odds-note').textContent =
-      `Final · ${winner ? `${winner.flag || ''} ${winner.team} are champions` : 'tournament complete'} · the grid shows each team's actual run (W/L by round)`;
+    note = `Final · ${winner ? `${winner.flag || ''} ${winner.team} are champions` : 'tournament complete'} · the grid shows each team's actual run (W/L by round)`;
+  } else if (!isLatest) {
+    note = `Odds as of ${niceDate(view.date)} · ${wcStageLabel(view)} · each column is the share of simulations a country reaches that stage`;
   } else {
     const phaseTxt = phase === 'group'
       ? `${left} group game${left === 1 ? '' : 's'} left, then the knockout bracket`
       : `live knockout bracket · ${left} game${left === 1 ? '' : 's'} to a champion`;
-    document.getElementById('wc-odds-note').textContent =
-      `${sims} Monte Carlo simulations from current ratings · ${phaseTxt} · each column is the share of simulations a country reaches that stage`;
+    note = `${sims} Monte Carlo simulations from current ratings · ${phaseTxt} · each column is the share of simulations a country reaches that stage`;
   }
+  document.getElementById('wc-odds-note').textContent = note;
 
-  // Run date + the newest signal (latest matchday's results).
-  const niceDate = ds => new Date(ds + 'T00:00:00').toLocaleDateString('en-US',
-    { month: 'short', day: 'numeric', year: 'numeric' });
+  // Stamp: live -> run date + newest matchday; historical -> the snapshot date.
   const stamp = document.getElementById('wc-odds-stamp');
   let stampHtml = '';
-  if (wcOddsData.generated) stampHtml += `<span class="wc-run">Run ${niceDate(wcOddsData.generated)}</span>`;
-  const md = wcOddsData.latest_matchday;
-  if (md && md.games && md.games.length) {
-    const chips = md.games.map(g => {
-      const so = g.so ? ` <span class="wc-so">(${g.so} pens)</span>` : '';
-      return `<span class="wc-result">${g.hflag || ''} ${g.home} <b>${g.hg}-${g.ag}</b> ${g.away} ${g.aflag || ''}${so}</span>`;
-    }).join('');
-    stampHtml += `<span class="wc-md-label">Newest results · ${niceDate(md.date)}</span>${chips}`;
+  if (isLatest) {
+    if (wcOddsData.generated) stampHtml += `<span class="wc-run">Run ${niceDate(wcOddsData.generated)}</span>`;
+    const md = wcOddsData.latest_matchday;
+    if (md && md.games && md.games.length) {
+      const chips = md.games.map(g => {
+        const so = g.so ? ` <span class="wc-so">(${g.so} pens)</span>` : '';
+        return `<span class="wc-result">${g.hflag || ''} ${g.home} <b>${g.hg}-${g.ag}</b> ${g.away} ${g.aflag || ''}${so}</span>`;
+      }).join('');
+      stampHtml += `<span class="wc-md-label">Newest results · ${niceDate(md.date)}</span>${chips}`;
+    }
+  } else {
+    stampHtml += `<span class="wc-run">Snapshot · ${niceDate(view.date)}</span>`;
   }
   stamp.innerHTML = stampHtml;
 
