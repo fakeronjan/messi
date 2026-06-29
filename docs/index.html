@@ -215,7 +215,9 @@
              border: 2px solid #fff; color: #1f2937; }
   .wc-champ-cell { font-weight: 800; }
   /* Results column: group finish tag + R32 opponent/result. */
-  .wc-results { white-space: normal; font-size: 12px; max-width: 360px; line-height: 1.6; }
+  .wc-results { font-size: 12px; }
+  /* Wrap on an inner div - max-width on a <td> is ignored by table layout. */
+  .wc-results-inner { max-width: 300px; white-space: normal; line-height: 1.55; }
   .wc-seg { white-space: nowrap; }   /* keep each round segment intact; wrap between them */
   .wc-grp { display: inline-block; font-weight: 700; color: #1a6b8a; background: #eef5f8;
             border-radius: 4px; padding: 1px 5px; font-size: 11px; font-variant-numeric: tabular-nums; }
@@ -1724,7 +1726,7 @@ function renderWcView() {
     const body = parts.length
       ? parts.map(p => `<span class="wc-seg">${p}</span>`).join('<span class="wc-sep">·</span>')
       : '<span style="color:#bbb">-</span>';
-    return `<td class="wc-results">${body}</td>`;
+    return `<td class="wc-results"><div class="wc-results-inner">${body}</div></td>`;
   };
   const champCell = t => t._kr.champ
     ? `<td class="col-num wc-heat wc-champ-cell"><span class="${t._kr.champ === 'W' ? 'wc-w' : 'wc-l'} wc-wl">${t._kr.champ}</span></td>`
