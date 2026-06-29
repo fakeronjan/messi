@@ -234,6 +234,8 @@
   .wc-grp { display: inline-block; font-weight: 700; color: #1a6b8a; background: #eef5f8;
             border-radius: 4px; padding: 1px 5px; font-size: 11px; font-variant-numeric: tabular-nums; }
   .wc-rec { color: #888; font-size: 11px; margin-left: 3px; font-variant-numeric: tabular-nums; }
+  .wc-out { display: inline-block; font-size: 10px; font-weight: 700; color: #c2306b; background: #fce8f0;
+            border-radius: 4px; padding: 1px 5px; letter-spacing: 0.3px; }
   .wc-rd { color: #999; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
   .wc-vs { color: #555; }
   .wc-w { color: #1a6b8a; font-weight: 700; }
@@ -1589,7 +1591,9 @@ function renderWcOdds() {
   const resultsCell = t => {
     const parts = [];
     if (t.grp) {
-      parts.push(`<span class="wc-grp">${t.grp}</span>${t.grp_rec ? `<span class="wc-rec">(${t.grp_rec})</span>` : ''}`);
+      // Teams that never reached the knockout (no path) get an explicit OUT badge.
+      const out = (t.eliminated && !(t.ko_path || []).length) ? ` <span class="wc-out">OUT</span>` : '';
+      parts.push(`<span class="wc-grp">${t.grp}</span>${t.grp_rec ? `<span class="wc-rec">(${t.grp_rec})</span>` : ''}${out}`);
     }
     (t.ko_path || []).forEach(k => {
       const rd = `<span class="wc-rd">${k.round}</span>`;
