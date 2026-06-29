@@ -520,6 +520,7 @@ let goatCache         = {};    // metric ('overall'|'offense'|'defense') → loa
 let teamsIndex        = null;
 let teamCache         = {};
 let nameToSlug        = {};  // country name → slug, built from teamsIndex
+let nameToConf        = {};  // country name → confederation, for the WC Odds badge
 
 // Pill state (replaces league-filter / league-select / history-league-filter / goat-league-filter dropdowns)
 let standingsConf  = 'all';
@@ -959,9 +960,11 @@ async function loadTeamsIndex() {
     const res = await fetch(`${BASE}/teams_index.json`);
     teamsIndex = await res.json();
     nameToSlug = {};
+    nameToConf = {};
     teamsIndex.forEach(t => {
       nameToSlug[t.name] = t.slug;
-      (t.historical_names || []).forEach(h => { nameToSlug[h] = t.slug; });
+      nameToConf[t.name] = t.confederation;
+      (t.historical_names || []).forEach(h => { nameToSlug[h] = t.slug; nameToConf[h] = t.confederation; });
     });
   } catch(e) {
     document.getElementById('team-select').innerHTML =
@@ -1721,7 +1724,9 @@ function renderWcView() {
     : `<td class="col-num wc-heat wc-champ-cell" style="background:${heat(t.champ, range.champ)}">${pct(t.champ)}</td>`;
   const rows = ordered.map((t, i) => {
     const slug = nameToSlug[t.team];
-    const inner = `<span style="margin-right:5px">${t.flag || ''}</span>${t.team}`;
+    const conf = nameToConf[t.team];
+    const confB = conf ? `<span style="margin-left:6px">${confederationBadge(conf, false)}</span>` : '';
+    const inner = `<span style="margin-right:5px">${t.flag || ''}</span>${t.team}${confB}`;
     const teamTd = slug
       ? `<td class="team-cell linked" data-team-slug="${slug}">${inner}</td>`
       : `<td class="team-cell">${inner}</td>`;
