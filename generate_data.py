@@ -764,6 +764,7 @@ for team in all_teams:
                 'year_anchor_label':   clean(r.get('year_anchor_label', '')),
                 'tournament_finishes': finishes_for_year,
                 'continental_winner':  1 if won_continental else 0,
+                'confederation':       clean(r['confederation']),   # per-season (honors historical switches)
             }
             era = display_name_at(team, r['date'])
             if era and era != team:
@@ -1591,8 +1592,10 @@ if _nteams >= 4:
                          reverse=True):
             _r = _reach[_t]
             _elim = (_t in _eliminated) or (_qual_set is not None and _t not in _qual_set)
+            _tsnap = _team_snaps.get(_t)
             _entry = {
                 'team': _t, 'flag': country_flag(_t), 'rating': round(float(_cur[_t]), 2),
+                'rank': (int(_tsnap[1][-1]) if _tsnap and _tsnap[1] else None),   # current global MESSI rank
                 'group': _gidx[_t], 'eliminated': bool(_elim),
                 'champ': _r['champ'] / _NSIM, 'final': _r['final'] / _NSIM, 'sf': _r['sf'] / _NSIM,
                 'qf': _r['qf'] / _NSIM, 'r16': _r['r16'] / _NSIM, 'r32': _r['r32'] / _NSIM,

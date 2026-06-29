@@ -260,7 +260,6 @@
   .finish-runner   { background: #ddd; color: #444; }
   .finish-leader   { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
   .finish-bronze   { background: #cd7f32; color: #fff; }
-  .conf-pill       { background: #f4f4f4; color: #555; border: 1px solid #e8e8e8; }
 
   .last-match-cell {
     font-size: 12px;
@@ -596,14 +595,6 @@ function wcConfBadge(conf, wonContinental) {
   return `<span class="wc-conf wc-conf-${conf}">${_CONF_BADGE_LABEL[conf] || conf}</span>`;
 }
 
-function confBadge(conf, wonContinental) {
-  // Country Summary uses a simpler gold-pill / plain-pill (no per-confederation color)
-  if (!conf) return '';
-  if (wonContinental) {
-    return `<span class="finish-badge finish-champion" title="${conf} Continental Champion">${conf} 🏆</span>`;
-  }
-  return `<span class="finish-badge conf-pill">${conf}</span>`;
-}
 
 
 function finishBadge(finishes) {
@@ -1197,7 +1188,7 @@ function renderTeamTable() {
     <td>${g.rank != null ? ratingBar(g.rating, _bs1) : '<span style="color:#bbb">-</span>'}</td>
     <td class="rating-cell od-cell col-hide-mobile">${fmtOD(g.rating_o, g.rank_o)}</td>
     <td class="rating-cell od-cell col-hide-mobile">${fmtOD(g.rating_d, g.rank_d)}</td>
-    <td class="col-hide-mobile" style="font-size:11px">${confBadge(data.confederation, g.continental_winner)}</td>
+    <td class="col-hide-mobile" style="font-size:11px">${wcConfBadge(g.confederation || data.confederation, g.continental_winner)}</td>
     ${tsView === 'worldcup' ? '' : `<td class="col-hide-mobile" style="font-size:11px">${finishBadge(g.tournament_finishes)}</td>`}
   </tr>`;
   }).join('');
@@ -1726,7 +1717,7 @@ function renderWcView() {
     return `<tr class="${t.eliminated ? 'wc-elim' : ''}">
       <td class="rank-cell">${i + 1}</td>
       ${teamTd}
-      <td class="col-num rating-cell">${t.rating.toFixed(2)}</td>
+      <td class="col-num rating-cell od-cell">${fmtOD(t.rating, t.rank)}</td>
       ${resultsCell(t)}
       ${heatCell(t, 'r16', 'col-hide-mobile')}${heatCell(t, 'qf', 'col-hide-mobile')}${heatCell(t, 'sf')}${heatCell(t, 'final')}
       ${champCell(t)}
@@ -1734,7 +1725,7 @@ function renderWcView() {
   }).join('');
   document.getElementById('wc-odds-wrap').innerHTML = `<table class="wc-odds-table">
     <thead><tr>
-      <th style="text-align:center">Rank</th><th>Country</th>
+      <th style="text-align:center">🏆 Rank</th><th>Country</th>
       <th class="col-num">Rating</th>
       <th>Results</th>
       <th class="col-num wc-col col-hide-mobile">R16</th><th class="col-num wc-col col-hide-mobile">QF</th>

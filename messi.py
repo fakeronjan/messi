@@ -343,6 +343,33 @@ CONFEDERATION_MAP = {
     'Tuvalu': 'OFC', 'Vanuatu': 'OFC',
 }
 
+# National teams that changed FIFA confederation. Each entry lists the
+# confederation in effect during [start, end] (inclusive, ISO dates), BEFORE the
+# current one in CONFEDERATION_MAP; outside these ranges the current mapping
+# applies. This flows into BOTH the cross-confederation ratings calibration and
+# the displayed badges, so a team is rated/shown under the confederation it
+# actually competed in at the time. (Same shape as generate_data's NAME_HISTORY.)
+CONFEDERATION_HISTORY = {
+    'Australia':  [('OFC', '1900-01-01', '2005-12-31')],   # OFC -> AFC, Jan 2006
+    'Kazakhstan': [('AFC', '1991-12-16', '2001-12-31')],   # AFC -> UEFA, 2002
+    'Israel':     [('OFC', '1900-01-01', '1993-12-31')],   # competed via OFC until UEFA membership, 1994
+}
+
+
+def _apply_confederation_history(frame, team_col, conf_col, date_col):
+    """Override confederation with the as-of-date value for the few teams that
+    switched confederation (vectorized; only touches the listed movers)."""
+    if not CONFEDERATION_HISTORY:
+        return
+    dates = pd.to_datetime(frame[date_col])
+    for team, periods in CONFEDERATION_HISTORY.items():
+        is_team = frame[team_col] == team
+        if not is_team.any():
+            continue
+        for conf, start, end in periods:
+            m = is_team & (dates >= pd.Timestamp(start)) & (dates <= pd.Timestamp(end))
+            frame.loc[m, conf_col] = conf
+
 
 def _solve_wls(window_df, confed_prior=None, prior_lambda=0.0):
     """
@@ -824,6 +851,10 @@ df.loc[shootout_mask & (df['shootout_winner'] == df['away_team']), 'away_win'] =
 
 df['home_confederation'] = df['home_team'].map(CONFEDERATION_MAP).fillna('Unknown')
 df['away_confederation'] = df['away_team'].map(CONFEDERATION_MAP).fillna('Unknown')
+# As-of-date override for teams that switched confederation (Australia, etc.),
+# so cross-confederation calibration uses the confederation in effect then.
+_apply_confederation_history(df, 'home_team', 'home_confederation', 'date')
+_apply_confederation_history(df, 'away_team', 'away_confederation', 'date')
 
 unknown_teams = set(
     df.loc[df['home_confederation'] == 'Unknown', 'home_team'].tolist() +
@@ -1283,8 +1314,9 @@ final_df['season'] = final_df['season'].astype('int64')   # ensure merge_asof ke
 final_df['name'] = final_df['name'].astype(str)
 final_df['date'] = pd.to_datetime(final_df['date'])
 
-# Confederation
+# Confederation (as-of snapshot date, honoring historical switches)
 final_df['confederation'] = final_df['name'].map(CONFEDERATION_MAP).fillna('Unknown')
+_apply_confederation_history(final_df, 'name', 'confederation', 'date')
 
 # Most-recent snapshot flag
 latest_id = final_df['ranking_id'].max()
