@@ -1511,16 +1511,23 @@ function renderWcOdds() {
   if (!teams.length) { if (nav) nav.style.display = 'none'; return; }
   if (nav) nav.style.display = '';
 
+  const complete = !!wcOddsData.complete;
+  const winner = complete ? (teams.find(t => !t.eliminated) || teams[0]) : null;
   document.getElementById('wc-odds-title').textContent =
-    `${wcOddsData.edition} FIFA World Cup 🏆 Win Probability`;
+    `${wcOddsData.edition} FIFA World Cup 🏆 ${complete ? 'Final Results' : 'Win Probability'}`;
   const sims = (wcOddsData.n_sims || 0).toLocaleString();
   const left = wcOddsData.games_left;
   const phase = wcOddsData.phase || 'group';
-  const phaseTxt = phase === 'group'
-    ? `${left} group game${left === 1 ? '' : 's'} left, then the knockout bracket`
-    : `live knockout bracket · ${left} game${left === 1 ? '' : 's'} to a champion`;
-  document.getElementById('wc-odds-note').textContent =
-    `${sims} Monte Carlo simulations from current ratings · ${phaseTxt} · each column is the share of simulations a country reaches that stage`;
+  if (complete) {
+    document.getElementById('wc-odds-note').textContent =
+      `Final · ${winner ? `${winner.flag || ''} ${winner.team} are champions` : 'tournament complete'} · the grid shows each team's actual run (W/L by round)`;
+  } else {
+    const phaseTxt = phase === 'group'
+      ? `${left} group game${left === 1 ? '' : 's'} left, then the knockout bracket`
+      : `live knockout bracket · ${left} game${left === 1 ? '' : 's'} to a champion`;
+    document.getElementById('wc-odds-note').textContent =
+      `${sims} Monte Carlo simulations from current ratings · ${phaseTxt} · each column is the share of simulations a country reaches that stage`;
+  }
 
   // Run date + the newest signal (latest matchday's results).
   const niceDate = ds => new Date(ds + 'T00:00:00').toLocaleDateString('en-US',

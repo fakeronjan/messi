@@ -1583,7 +1583,10 @@ if _nteams >= 4:
 
     _reach = {t: {k: int(_reach_arr[k][_tix[t]]) for k in _KEYS} for t in _teams}
 
-    if _in_progress and _teams:
+    # Emit whenever the edition has teams - in progress OR complete. A finished
+    # tournament keeps the tab alive as a permanent record (grid resolves to W/L
+    # per round, champion on top); it only hides when there's no WC data at all.
+    if _teams:
         for _t in sorted(_teams, key=lambda t: (_reach[t]['champ'], _reach[t]['final'], _reach[t]['sf']),
                          reverse=True):
             _r = _reach[_t]
@@ -1604,6 +1607,7 @@ if _nteams >= 4:
         wc_odds['n_sims'] = _NSIM
         wc_odds['games_left'] = _games_left
         wc_odds['phase'] = 'group' if not _group_done else 'knockout'
+        wc_odds['complete'] = not _in_progress      # champion decided -> final results
         # The newest signal feeding this run: the most recent matchday's results,
         # so the tab can show what just happened and on which date.
         _done = _ed[_ed['home_score'].notna()]
@@ -1618,11 +1622,15 @@ if _nteams >= 4:
                                   and _g['shootout_winner'].strip() else None)}
                           for _, _g in _done[_done['date'] == _last].sort_values('home_team').iterrows()]
             }
-        print(f"  {_wc_year} WC ({wc_odds['phase']}): {_games_left} games to a champion, "
-              f"{_NSIM:,} sims. Favorite: {wc_odds['teams'][0]['team']} "
-              f"{wc_odds['teams'][0]['champ'] * 100:.1f}%")
+        if _in_progress:
+            print(f"  {_wc_year} WC ({wc_odds['phase']}): {_games_left} games to a champion, "
+                  f"{_NSIM:,} sims. Favorite: {wc_odds['teams'][0]['team']} "
+                  f"{wc_odds['teams'][0]['champ'] * 100:.1f}%")
+        else:
+            print(f"  {_wc_year} WC complete: {wc_odds['teams'][0]['team']} champions. "
+                  f"Tab persists with final results.")
     else:
-        print(f"  {_wc_year} WC complete or no live edition; wrote empty odds (tab hides).")
+        print(f"  {_wc_year} WC: no teams; wrote empty odds (tab hides).")
 else:
     print("  no World Cup data; wrote empty odds.")
 
