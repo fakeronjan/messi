@@ -237,6 +237,18 @@
   .wc-out { display: inline-block; font-size: 10px; font-weight: 700; color: #c2306b; background: #fce8f0;
             border-radius: 4px; padding: 1px 5px; letter-spacing: 0.3px; }
   .wc-rd { color: #999; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
+  /* Confederation badge, softened for inline use next to the country name: pastel
+     tint + muted colored text, keeping each confederation's color identity but
+     dialed down vs the bold league-badge used in Standings/Tournaments. */
+  .wc-conf { display: inline-block; font-size: 9px; font-weight: 600; padding: 1px 5px;
+             border-radius: 3px; letter-spacing: 0.2px; white-space: nowrap;
+             vertical-align: middle; background: #eee; color: #666; }
+  .wc-conf-UEFA     { background: #f6e8e8; color: #b3373f; }
+  .wc-conf-CONMEBOL { background: #f5eed7; color: #9a7a16; }
+  .wc-conf-CONCACAF { background: #ebebeb; color: #444;    }
+  .wc-conf-AFC      { background: #e6f0ea; color: #2e7d52; }
+  .wc-conf-CAF      { background: #e7edf6; color: #3a6499; }
+  .wc-conf-OFC      { background: #ededed; color: #666;    }
   .wc-vs { color: #555; }
   .wc-w { color: #1a6b8a; font-weight: 700; }
   .wc-l { color: #c2306b; font-weight: 700; }
@@ -601,6 +613,13 @@ function confederationBadge(confed, wonContinental) {
   const cls = _CONF_BADGE_CLS[confed] || 'badge-Other';
   const label = _CONF_BADGE_LABEL[confed] || confed;
   return `<span class="league-badge ${cls}">${label}</span>`;
+}
+
+// Softened confederation badge for the WC Odds table (inline next to the country
+// name). Same labels as the bold league-badge, pastel styling - see .wc-conf CSS.
+function wcConfBadge(conf) {
+  if (!conf) return '';
+  return `<span class="wc-conf wc-conf-${conf}">${_CONF_BADGE_LABEL[conf] || conf}</span>`;
 }
 
 function confBadge(conf, wonContinental) {
@@ -1725,7 +1744,7 @@ function renderWcView() {
   const rows = ordered.map((t, i) => {
     const slug = nameToSlug[t.team];
     const conf = nameToConf[t.team];
-    const confB = conf ? `<span style="margin-left:6px">${confederationBadge(conf, false)}</span>` : '';
+    const confB = conf ? `<span style="margin-left:6px">${wcConfBadge(conf)}</span>` : '';
     const inner = `<span style="margin-right:5px">${t.flag || ''}</span>${t.team}${confB}`;
     const teamTd = slug
       ? `<td class="team-cell linked" data-team-slug="${slug}">${inner}</td>`
