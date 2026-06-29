@@ -445,8 +445,8 @@
 </header>
 
 <nav>
-  <button class="active" data-tab="standings">Standings</button>
   <button data-tab="wc-odds" id="wc-odds-nav" style="display:none">🏆 WC Odds</button>
+  <button class="active" data-tab="standings">Standings</button>
   <button data-tab="team-summary">Country Summary</button>
   <button data-tab="league-history">Tournaments</button>
   <button data-tab="goat">GOAT Table</button>
@@ -788,8 +788,12 @@ function fmtOD(val, rank) {
 }
 
 // ── Tab switching ────────────────────────────────────────────────────────────
+// Track whether the visitor has chosen a tab, so the WC Odds auto-land (below)
+// never overrides a deliberate navigation.
+let userPickedTab = false;
 document.querySelectorAll('nav button').forEach(btn => {
   btn.addEventListener('click', () => {
+    userPickedTab = true;
     document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     btn.classList.add('active');
@@ -1510,6 +1514,14 @@ function renderWcOdds() {
   // No World Cup in progress -> hide the tab entirely (odds only exist mid-event).
   if (!teams.length) { if (nav) nav.style.display = 'none'; return; }
   if (nav) nav.style.display = '';
+  // WC Odds is the headline tab: land here by default when an edition is live or
+  // just finished, unless the visitor has already navigated somewhere else.
+  if (nav && !userPickedTab) {
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    nav.classList.add('active');
+    document.getElementById('wc-odds').classList.add('active');
+  }
 
   const complete = !!wcOddsData.complete;
   const winner = complete ? (teams.find(t => !t.eliminated) || teams[0]) : null;
