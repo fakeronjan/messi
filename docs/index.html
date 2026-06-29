@@ -215,7 +215,8 @@
              border: 2px solid #fff; color: #1f2937; }
   .wc-champ-cell { font-weight: 800; }
   /* Results column: group finish tag + R32 opponent/result. */
-  .wc-results { white-space: nowrap; font-size: 12px; }
+  .wc-results { white-space: normal; font-size: 12px; max-width: 360px; line-height: 1.6; }
+  .wc-seg { white-space: nowrap; }   /* keep each round segment intact; wrap between them */
   .wc-grp { display: inline-block; font-weight: 700; color: #1a6b8a; background: #eef5f8;
             border-radius: 4px; padding: 1px 5px; font-size: 11px; font-variant-numeric: tabular-nums; }
   .wc-rec { color: #888; font-size: 11px; margin-left: 3px; font-variant-numeric: tabular-nums; }
@@ -1619,22 +1620,17 @@ function renderWcView() {
 
   const niceDate = ds => new Date(ds + 'T00:00:00').toLocaleDateString('en-US',
     { month: 'short', day: 'numeric', year: 'numeric' });
-  const complete = !!view.complete;
-  const winner = complete ? (teams.find(t => !t.eliminated) || teams[0]) : null;
   const sims = (view.n_sims || (wcOddsData && wcOddsData.n_sims) || 0).toLocaleString();
-
   // Edition/tournament live on the history bucket, not on a snapshot - resolve
   // from there so a historical date doesn't render "undefined ...".
   const edition = view.edition || (bucket && bucket.edition) || (wcOddsData && wcOddsData.edition) || '';
   const tournament = (bucket && bucket.tournament) || 'FIFA World Cup';
+  // Header is CONSTANT across editions and dates - completion is conveyed by the
+  // date dropdown ("Champion") and the W/L grid, not by changing the header.
   document.getElementById('wc-odds-title').textContent =
-    `${edition} ${tournament} 🏆 ${complete ? 'Final Results' : 'Win Probability'}`;
-  // One constant note regardless of the selected date - the date/round is the
-  // dropdown's job, so echoing "odds as of <date>" here is just filler.
-  const note = complete
-    ? `${winner ? `${winner.flag || ''} ${winner.team} are champions` : 'Tournament complete'} · grid shows each team's run, W/L by round`
-    : `${sims} Monte Carlo simulations · each column is the chance to reach that stage`;
-  document.getElementById('wc-odds-note').textContent = note;
+    `${edition} ${tournament} 🏆 Win Probability`;
+  document.getElementById('wc-odds-note').textContent =
+    `${sims} Monte Carlo simulations · each column is the chance to reach that stage`;
 
   // Below the dropdown: the matchday that produced this state - kept for EVERY
   // date, not just live. The full-R32 state (bracket set, no knockout game yet)
@@ -1726,7 +1722,7 @@ function renderWcView() {
       }
     });
     const body = parts.length
-      ? parts.join('<span class="wc-sep">·</span>')
+      ? parts.map(p => `<span class="wc-seg">${p}</span>`).join('<span class="wc-sep">·</span>')
       : '<span style="color:#bbb">-</span>';
     return `<td class="wc-results">${body}</td>`;
   };
