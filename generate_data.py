@@ -1664,13 +1664,13 @@ def _append_wc_history(wc, path='docs/data/wc_odds_history.json'):
     while each new result appends. Date is NOT a safe key - the full-R32 forecast
     and the first knockout result fall on the same calendar day.
 
-    Only KNOCKOUT-phase snapshots are recorded: the schedule-aware odds follow
-    the real FIFA bracket (commit 803223b onward). Group-stage odds rating-seed
-    the knockout - a since-superseded model - so they're excluded from the
-    history and the date selector. (For 2026 this is the 6/28 cutoff; it
-    generalizes - every edition's group stage is auto-excluded.)"""
+    FOR NOW we record knockout-phase snapshots only - the knockout model is the
+    one worth surfacing today (it follows the real FIFA bracket, 803223b onward),
+    whereas the current group-stage odds rating-seed the knockout. This is a
+    display choice, NOT a permanent rule: if/when we have a schedule-aware
+    group-phase model worth showing, drop this gate to include group snapshots."""
     _snap = _wc_history_snapshot(wc)
-    if _snap is None or _snap['phase'] != 'knockout':
+    if _snap is None or _snap['phase'] != 'knockout':   # see docstring - current choice, not doctrine
         return
     try:
         with open(path) as f:
