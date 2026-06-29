@@ -1652,6 +1652,7 @@ def _wc_history_snapshot(wc):
         'phase': wc.get('phase', 'group') or 'group',
         'games_left': wc.get('games_left'),
         'complete': bool(wc.get('complete')),
+        'latest_matchday': wc.get('latest_matchday'),   # results strip retained per date
         'teams': _ts,
     }
 
