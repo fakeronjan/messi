@@ -210,15 +210,18 @@
 
   /* World Cup odds: per-column heat map (fleet colors: teal = high, pink = low). */
   /* Equal-width round columns. */
+  /* FIXED layout so the Results column actually wraps to its set width instead of
+     auto-sizing to the one-line text (which ignored the inner max-width and bled). */
+  .wc-odds-table { table-layout: fixed; width: 100%; min-width: 980px; }
+  .wc-odds-table .team-cell { white-space: normal; }   /* long names wrap, not overflow */
   .wc-heat, .wc-odds-table th.wc-col { width: 74px; padding-left: 7px; padding-right: 7px; }
   .wc-heat { text-align: center; font-variant-numeric: tabular-nums; font-weight: 600;
              border: 2px solid #fff; color: #1f2937; }
   .wc-champ-cell { font-weight: 800; }
-  /* Results column: group finish tag + R32 opponent/result. */
+  /* Results column wraps within its fixed width; each round segment stays intact. */
   .wc-results { font-size: 12px; }
-  /* Wrap on an inner div - max-width on a <td> is ignored by table layout. */
-  .wc-results-inner { max-width: 300px; white-space: normal; line-height: 1.55; }
-  .wc-seg { white-space: nowrap; }   /* keep each round segment intact; wrap between them */
+  .wc-results-inner { white-space: normal; overflow-wrap: anywhere; line-height: 1.55; }
+  .wc-seg { white-space: nowrap; }
   .wc-grp { display: inline-block; font-weight: 700; color: #1a6b8a; background: #eef5f8;
             border-radius: 4px; padding: 1px 5px; font-size: 11px; font-variant-numeric: tabular-nums; }
   .wc-rec { color: #888; font-size: 11px; margin-left: 3px; font-variant-numeric: tabular-nums; }
@@ -1725,7 +1728,7 @@ function renderWcView() {
       }
     });
     const body = parts.length
-      ? parts.map(p => `<span class="wc-seg">${p}</span>`).join('<span class="wc-sep">·</span>')
+      ? parts.map(p => `<span class="wc-seg">${p}</span>`).join(' <span class="wc-sep">·</span> ')
       : '<span style="color:#bbb">-</span>';
     return `<td class="wc-results"><div class="wc-results-inner">${body}</div></td>`;
   };
@@ -1755,10 +1758,10 @@ function renderWcView() {
   }).join('');
   document.getElementById('wc-odds-wrap').innerHTML = `<table class="wc-odds-table">
     <thead><tr>
-      <th style="text-align:center">🏆 Rank</th><th>Country</th>
-      <th class="col-num">Rating</th>
-      <th class="col-hide-mobile col-num" title="Attacking strength: goals scored vs an average opponent. Sums with Defense to Rating.">OFF</th>
-      <th class="col-hide-mobile col-num" title="Defending strength: goals prevented vs an average opponent. Sums with Offense to Rating.">DEF</th>
+      <th style="text-align:center;width:52px">🏆 Rank</th><th style="width:158px">Country</th>
+      <th class="col-num" style="width:60px">Rating</th>
+      <th class="col-hide-mobile col-num" style="width:56px" title="Attacking strength: goals scored vs an average opponent. Sums with Defense to Rating.">OFF</th>
+      <th class="col-hide-mobile col-num" style="width:56px" title="Defending strength: goals prevented vs an average opponent. Sums with Offense to Rating.">DEF</th>
       <th>Results</th>
       ${showR16 ? '<th class="col-num wc-col col-hide-mobile">R16</th>' : ''}<th class="col-num wc-col col-hide-mobile">QF</th>
       <th class="col-num wc-col">SF</th><th class="col-num wc-col">Final</th>
