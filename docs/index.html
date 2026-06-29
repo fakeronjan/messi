@@ -244,7 +244,6 @@
   .wc-odds-table tr.wc-elim { opacity: 0.6; }
   /* Keep the eliminated team's path legible even while the row is dimmed. */
   .wc-odds-table tr.wc-elim .wc-results { opacity: 1; }
-  .wc-out { font-size: 11px; font-weight: 700; color: #b23; letter-spacing: 0.5px; text-transform: uppercase; }
   /* Run date + newest-matchday results strip. */
   .wc-stamp { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin: 2px 0 14px; font-size: 12px; }
   .wc-run { font-weight: 700; color: #1a6b8a; background: #eef5f8; border: 1px solid #cfe1e9; border-radius: 12px; padding: 2px 9px; }
@@ -1612,7 +1611,7 @@ function renderWcOdds() {
   const champCell = t => t._kr.champ
     ? `<td class="col-num wc-heat wc-champ-cell"><span class="${t._kr.champ === 'W' ? 'wc-w' : 'wc-l'} wc-wl">${t._kr.champ}</span></td>`
     : t.eliminated
-    ? `<td class="col-num wc-heat wc-champ-cell"><span class="wc-out">out</span></td>`
+    ? `<td class="col-num wc-heat wc-champ-cell"><span style="color:#bbb">-</span></td>`
     : `<td class="col-num wc-heat wc-champ-cell" style="background:${heat(t.champ, range.champ)}">${pct(t.champ)}</td>`;
   const rows = ordered.map((t, i) => {
     const slug = nameToSlug[t.team];
