@@ -1626,12 +1626,12 @@ function renderWcView() {
 
   // Below the dropdown: the matchday that produced this state - kept for EVERY
   // date, not just live. The full-R32 state (bracket set, no knockout game yet)
-  // shows "End of group phase" instead of the trailing group results.
+  // shows "End of group stage" instead of the trailing group results.
   const stamp = document.getElementById('wc-odds-stamp');
   const koPlayed = teams.some(t => (t.ko_path || []).some(k => !k.pending));
   let stampHtml = '';
   if (view.phase === 'knockout' && !koPlayed) {
-    stampHtml = `<span class="wc-md-label">End of group phase</span>`;
+    stampHtml = `<span class="wc-md-label">End of group stage</span>`;
   } else {
     const md = view.latest_matchday;
     if (md && md.games && md.games.length) {
