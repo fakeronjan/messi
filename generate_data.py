@@ -1662,9 +1662,15 @@ def _append_wc_history(wc, path='docs/data/wc_odds_history.json'):
     de-duped within an edition by game-state (phase + games_left). Every played
     game changes games_left, so a re-run of the same state refreshes in place
     while each new result appends. Date is NOT a safe key - the full-R32 forecast
-    and the first knockout result fall on the same calendar day."""
+    and the first knockout result fall on the same calendar day.
+
+    Only KNOCKOUT-phase snapshots are recorded: the schedule-aware odds follow
+    the real FIFA bracket (commit 803223b onward). Group-stage odds rating-seed
+    the knockout - a since-superseded model - so they're excluded from the
+    history and the date selector. (For 2026 this is the 6/28 cutoff; it
+    generalizes - every edition's group stage is auto-excluded.)"""
     _snap = _wc_history_snapshot(wc)
-    if _snap is None:
+    if _snap is None or _snap['phase'] != 'knockout':
         return
     try:
         with open(path) as f:
