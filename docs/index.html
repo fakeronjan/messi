@@ -164,21 +164,6 @@
   .linked { cursor: pointer; }
   .linked:hover { text-decoration: underline; }
   .team-cell.linked, .team-link.linked { color: #1a6b8a; }
-  .league-badge {
-    display: inline-block;
-    font-size: 10px;
-    font-weight: 700;
-    padding: 2px 6px;
-    border-radius: 3px;
-    letter-spacing: 0.3px;
-    white-space: nowrap;
-  }
-  .badge-EPL        { background: #cc0000; color: #fff; }
-  .badge-LaLiga     { background: #f5c518; color: #1a1a1a; }
-  .badge-Bundesliga { background: #1a1a1a; color: #fff; }
-  .badge-SerieA     { background: #00843d; color: #fff; }
-  .badge-Ligue1     { background: #0055a4; color: #fff; }
-  .badge-Other      { background: #555; color: #fff; }
 
   .rating-cell {
     font-weight: 700;
@@ -237,9 +222,9 @@
   .wc-out { display: inline-block; font-size: 10px; font-weight: 700; color: #c2306b; background: #fce8f0;
             border-radius: 4px; padding: 1px 5px; letter-spacing: 0.3px; }
   .wc-rd { color: #999; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
-  /* Confederation badge, softened for inline use next to the country name: pastel
-     tint + muted colored text, keeping each confederation's color identity but
-     dialed down vs the bold league-badge used in Standings/Tournaments. */
+  /* Confederation badge shown inline next to a country name (WC Odds, Standings,
+     GOAT): pastel tint + muted colored text, each confederation's color identity
+     dialed down. */
   .wc-conf { display: inline-block; font-size: 9px; font-weight: 600; padding: 1px 5px;
              border-radius: 3px; letter-spacing: 0.2px; white-space: nowrap;
              vertical-align: middle; background: #eee; color: #666; }
@@ -591,11 +576,6 @@ function buildConfPills(containerId, includeAll, current, onSelect) {
 }
 
 // ── Utilities ───────────────────────────────────────────────────────────────
-const _CONF_BADGE_CLS = {
-  'UEFA': 'badge-EPL', 'CONMEBOL': 'badge-LaLiga',
-  'CONCACAF': 'badge-Bundesliga', 'AFC': 'badge-SerieA',
-  'CAF': 'badge-Ligue1', 'OFC': 'badge-Other',
-};
 const _CONF_BADGE_LABEL = {
   'UEFA':     '🇪🇺 UEFA',
   'CONMEBOL': '🌎 CONMEBOL',
@@ -605,20 +585,14 @@ const _CONF_BADGE_LABEL = {
   'OFC':      '🌏 OFC',
 };
 
-function confederationBadge(confed, wonContinental) {
-  if (!confed) return '';
-  if (wonContinental) {
-    return `<span class="finish-badge finish-champion" title="${confed} Continental Champion">${confed} 🏆</span>`;
-  }
-  const cls = _CONF_BADGE_CLS[confed] || 'badge-Other';
-  const label = _CONF_BADGE_LABEL[confed] || confed;
-  return `<span class="league-badge ${cls}">${label}</span>`;
-}
-
-// Softened confederation badge for the WC Odds table (inline next to the country
-// name). Same labels as the bold league-badge, pastel styling - see .wc-conf CSS.
-function wcConfBadge(conf) {
+// Softened confederation badge shown inline next to a country name (WC Odds,
+// Standings, GOAT). Pastel styling (see .wc-conf CSS); reigning continental
+// champions keep the prominent gold honor badge.
+function wcConfBadge(conf, wonContinental) {
   if (!conf) return '';
+  if (wonContinental) {
+    return `<span class="finish-badge finish-champion" title="${conf} Continental Champion">${conf} 🏆</span>`;
+  }
   return `<span class="wc-conf wc-conf-${conf}">${_CONF_BADGE_LABEL[conf] || conf}</span>`;
 }
 
@@ -929,7 +903,8 @@ function renderStandings() {
     const cRank = confRankMap[t.team] || '-';
     const isStale = !!(prevDate && t.last_match_date && t.last_match_date <= prevDate);
     const slug = nameToSlug[t.team];
-    const cellInner = `<span style="margin-right:4px">${t.flag || ''}</span>${t.display_name || t.team}`;
+    const confB = t.confederation ? `<span style="margin-left:6px">${wcConfBadge(t.confederation, !!t.continental_winner)}</span>` : '';
+    const cellInner = `<span style="margin-right:4px">${t.flag || ''}</span>${t.display_name || t.team}${confB}`;
     const teamTd = slug
       ? `<td class="team-cell linked" data-team-slug="${slug}" data-season="${season}">${cellInner}</td>`
       : `<td class="team-cell">${cellInner}</td>`;
@@ -937,7 +912,6 @@ function renderStandings() {
       <td class="rank-cell">${t.rank != null ? t.rank : '-'}</td>
       <td class="rank-cell col-hide-mobile">${cRank}</td>
       ${teamTd}
-      <td>${confederationBadge(t.confederation, !!t.continental_winner)}</td>
       <td>${ratingBar(t.rating, _bs0)}</td>
       <td class="rating-cell od-cell col-hide-mobile">${fmtOD(t.rating_o, t.rank_o)}</td>
       <td class="rating-cell od-cell col-hide-mobile">${fmtOD(t.rating_d, t.rank_d)}</td>
@@ -954,7 +928,7 @@ function renderStandings() {
     <table>
       <thead><tr>
         <th class="col-num">OVR #</th><th class="col-hide-mobile col-num">Conf #</th>
-        <th>Country</th><th>Conf</th><th class="col-num">Rating</th>
+        <th>Country</th><th class="col-num">Rating</th>
         <th class="col-hide-mobile col-num" title="Attacking strength: goals scored vs an average opponent. Sums with Defense to Rating.">OFF</th>
         <th class="col-hide-mobile col-num" title="Defending strength: goals prevented vs an average opponent. Sums with Offense to Rating.">DEF</th>
         <th>Last Match</th>
@@ -1487,7 +1461,8 @@ function renderGoat() {
   const _bs2 = barScale(teams.map(t => t[activeField]));
   const rows = teams.map(t => {
     const slug = nameToSlug[t.team];
-    const cellInner = `<span style="margin-right:4px">${t.flag || ''}</span>${t.display_name || t.team}`;
+    const confB = t.confederation ? `<span style="margin-left:6px">${wcConfBadge(t.confederation, !!t.continental_winner)}</span>` : '';
+    const cellInner = `<span style="margin-right:4px">${t.flag || ''}</span>${t.display_name || t.team}${confB}`;
     const teamTd = slug
       ? `<td class="team-cell linked" data-team-slug="${slug}" data-season="${t.season}">${cellInner}</td>`
       : `<td class="team-cell">${cellInner}</td>`;
@@ -1502,7 +1477,6 @@ function renderGoat() {
     <td class="rank-cell">${t.rank}</td>
     <td class="season-cell linked" data-season-link="${t.season}" data-target-conf="${targetConf}" style="text-align:center;white-space:nowrap">${t.season}</td>
     ${teamTd}
-    <td>${confederationBadge(t.confederation, !!t.continental_winner)}</td>
     ${metricCells}
     <td class="col-hide-mobile" style="font-size:11px">${finishBadge(t.tournament_finishes)}</td>
   </tr>`;
@@ -1515,7 +1489,7 @@ function renderGoat() {
       <thead><tr>
         <th style="text-align:center">All time rank</th>
         <th style="text-align:center">Year</th>
-        <th>Country</th><th>Conf</th>
+        <th>Country</th>
         ${metricHeaders}
         <th class="col-hide-mobile">Honors</th>
       </tr></thead>
