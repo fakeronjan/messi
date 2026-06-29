@@ -1211,6 +1211,32 @@ _wc_year = int(_wc_all['date'].dt.year.max()) if len(_wc_all) else None
 wc_odds = {'edition': _wc_year,
            'generated': datetime.now(timezone.utc).strftime('%Y-%m-%d'), 'teams': []}
 
+# RE-SIM MODE (gated, opt-in via env): re-run the WC odds for a PAST game-state
+# using the current ratings as of that date, then patch the matching history
+# snapshot in place (does NOT touch the live wc_odds.json). Lets us refresh a
+# pre-methodology-change archive snapshot (e.g. 6/28 full-R32) so it's apples-to-
+# apples with later dates. WC_RESIM_ASOF = 'group_end' (full-R32 forecast: ratings
+# as of the last group game, knockout treated as unplayed) or an ISO date.
+_RESIM_ASOF = os.environ.get('WC_RESIM_ASOF') or None
+_asof = None   # set inside the edition block when re-simming
+
+
+def _rating_rank_asof(team, asof):
+    """(rating, rank) for a team as of `asof`, or latest if asof is None. _team_snaps
+    dates are python dates, so normalize the query (mirrors _raw_pre_rating)."""
+    _s = _team_snaps.get(team)
+    if not _s or not _s[2]:
+        return (0.0, None)
+    if asof is None:
+        _i = len(_s[2]) - 1
+    else:
+        _key = asof.date() if hasattr(asof, 'date') else asof
+        _i = bisect_right(_s[0], _key) - 1
+    if _i < 0:
+        return (0.0, None)
+    return (_s[2][_i], int(_s[1][_i]) if _s[1] else None)
+
+
 def _ko_winner(row):
     """Knockout winner, honoring a penalty shootout on a regulation draw."""
     if row['home_score'] > row['away_score']: return row['home_team']
@@ -1222,12 +1248,24 @@ _ed = _wc_all[_wc_all['date'].dt.year == _wc_year].sort_values('date') if _wc_ye
 _nteams = pd.concat([_ed['home_team'], _ed['away_team']]).nunique() if len(_ed) else 0
 if _nteams >= 4:
     _ngroups = _nteams // 4
+    if _RESIM_ASOF is not None:               # re-sim a past state
+        _asof = (_ed.iloc[:_ngroups * 6]['date'].max()
+                 if _RESIM_ASOF == 'group_end' else pd.Timestamp(_RESIM_ASOF).date())
+        # Treat games AFTER the as-of date as unplayed (null scores) rather than
+        # dropping them, so future fixtures keep their dates for the pending matchups.
+        _ed = _ed.copy()
+        _future = _ed['date'] > _asof
+        _ed.loc[_future, ['home_score', 'away_score']] = np.nan
+        if 'shootout_winner' in _ed.columns:
+            _ed.loc[_future, 'shootout_winner'] = np.nan
+        print(f"  RE-SIM as of {_asof}: {int((~_future).sum())} games played, "
+              f"{int(_future.sum())} treated as unplayed.")
     _grp = _ed.iloc[:_ngroups * 6]            # group stage precedes knockouts by date
     _ko = _ed.iloc[_ngroups * 6:]
     _grp_unplayed = _grp[_grp['home_score'].isna()]
     _grp_played = _grp[_grp['home_score'].notna()]
     _n_thirds = 8 if _ngroups == 12 else 0
-    _cur = {_t: (_team_snaps[_t][2][-1] if _team_snaps.get(_t) and _team_snaps[_t][2] else 0.0)
+    _cur = {_t: _rating_rank_asof(_t, _asof)[0]
             for _t in set(pd.concat([_ed['home_team'], _ed['away_team']]))}
 
     # Knockout games played so far -> winner, round, eliminations (skip 3rd place).
@@ -1597,10 +1635,9 @@ if _nteams >= 4:
                          reverse=True):
             _r = _reach[_t]
             _elim = (_t in _eliminated) or (_qual_set is not None and _t not in _qual_set)
-            _tsnap = _team_snaps.get(_t)
             _entry = {
                 'team': _t, 'flag': country_flag(_t), 'rating': round(float(_cur[_t]), 2),
-                'rank': (int(_tsnap[1][-1]) if _tsnap and _tsnap[1] else None),   # current global MESSI rank
+                'rank': _rating_rank_asof(_t, _asof)[1],   # global MESSI rank (as-of date when re-simming)
                 'group': _gidx[_t], 'eliminated': bool(_elim),
                 'champ': _r['champ'] / _NSIM, 'final': _r['final'] / _NSIM, 'sf': _r['sf'] / _NSIM,
                 'qf': _r['qf'] / _NSIM, 'r16': _r['r16'] / _NSIM, 'r32': _r['r32'] / _NSIM,
@@ -1642,8 +1679,9 @@ if _nteams >= 4:
 else:
     print("  no World Cup data; wrote empty odds.")
 
-with open('docs/data/wc_odds.json', 'w') as f:
-    json.dump(wc_odds, f, separators=(',', ':'))
+if _RESIM_ASOF is None:                    # re-sim mode never overwrites the live odds
+    with open('docs/data/wc_odds.json', 'w') as f:
+        json.dump(wc_odds, f, separators=(',', ':'))
 
 
 WC_HISTORY_TOURNAMENT = 'FIFA World Cup'   # MESSI's odds engine covers the WC finals
@@ -1707,6 +1745,19 @@ def _append_wc_history(wc, path='docs/data/wc_odds_history.json'):
           f"(latest: {_snap['phase']} games_left={_snap['games_left']}).")
 
 
+if _RESIM_ASOF is not None:
+    # Re-sim: preserve the matching snapshot's original date so it replaces in place
+    # (and doesn't add a 'today'-dated duplicate).
+    try:
+        with open('docs/data/wc_odds_history.json') as _hf:
+            _h0 = json.load(_hf)
+        for _b0 in _h0.get('tournaments', []):
+            for _s0 in _b0.get('snapshots', []):
+                if (_s0.get('phase') == wc_odds.get('phase')
+                        and _s0.get('games_left') == wc_odds.get('games_left')):
+                    wc_odds['generated'] = _s0.get('date')
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass
 _append_wc_history(wc_odds)
 
 print(f"Done. {len(teams_index)} teams, {len(standings_data['teams'])} in current standings.")
