@@ -1606,8 +1606,6 @@ function renderWcView() {
     { month: 'short', day: 'numeric', year: 'numeric' });
   const complete = !!view.complete;
   const winner = complete ? (teams.find(t => !t.eliminated) || teams[0]) : null;
-  const left = view.games_left;
-  const phase = view.phase || 'group';
   const sims = (view.n_sims || (wcOddsData && wcOddsData.n_sims) || 0).toLocaleString();
 
   // Edition/tournament live on the history bucket, not on a snapshot - resolve
@@ -1616,31 +1614,25 @@ function renderWcView() {
   const tournament = (bucket && bucket.tournament) || 'FIFA World Cup';
   document.getElementById('wc-odds-title').textContent =
     `${edition} ${tournament} 🏆 ${complete ? 'Final Results' : 'Win Probability'}`;
-  let note;
-  if (complete) {
-    note = `${winner ? `${winner.flag || ''} ${winner.team} are champions` : 'Tournament complete'} · grid shows each team's run, W/L by round`;
-  } else {
-    const ctx = !isLatest
-      ? `Odds as of ${niceDate(view.date)} · ${wcStageLabel(view)}`
-      : phase === 'group'
-        ? `${sims} simulations · ${left} group game${left === 1 ? '' : 's'} left`
-        : `${sims} simulations · ${left} game${left === 1 ? '' : 's'} to a champion`;
-    note = `${ctx} · each column is the chance to reach that stage`;
-  }
+  // One constant note regardless of the selected date - the date/round is the
+  // dropdown's job, so echoing "odds as of <date>" here is just filler.
+  const note = complete
+    ? `${winner ? `${winner.flag || ''} ${winner.team} are champions` : 'Tournament complete'} · grid shows each team's run, W/L by round`
+    : `${sims} Monte Carlo simulations · each column is the chance to reach that stage`;
   document.getElementById('wc-odds-note').textContent = note;
 
-  // Stamp: live -> run date + newest matchday; historical -> the snapshot date.
+  // Below the dropdown: just the newest-matchday results on the live view. (The
+  // "Run <date>" cron stamp was internal filler; historical views show nothing.)
   const stamp = document.getElementById('wc-odds-stamp');
   let stampHtml = '';
   if (isLatest) {
-    if (wcOddsData.generated) stampHtml += `<span class="wc-run">Run ${niceDate(wcOddsData.generated)}</span>`;
     const md = wcOddsData.latest_matchday;
     if (md && md.games && md.games.length) {
       const chips = md.games.map(g => {
         const so = g.so ? ` <span class="wc-so">(${g.so} pens)</span>` : '';
         return `<span class="wc-result">${g.hflag || ''} ${g.home} <b>${g.hg}-${g.ag}</b> ${g.away} ${g.aflag || ''}${so}</span>`;
       }).join('');
-      stampHtml += `<span class="wc-md-label">Newest results · ${niceDate(md.date)}</span>${chips}`;
+      stampHtml = `<span class="wc-md-label">Newest results · ${niceDate(md.date)}</span>${chips}`;
     }
   }
   stamp.innerHTML = stampHtml;
