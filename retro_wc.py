@@ -14,16 +14,33 @@ from bisect import bisect_left, bisect_right
 REPO = os.path.dirname(os.path.abspath(__file__))   # run from the repo root
 WRITE = '--write' in sys.argv
 
-R = pd.read_csv(f'{REPO}/messi_ratings_final.csv.gz', usecols=['date', 'country', 'rating', 'rank'])
+R = pd.read_csv(f'{REPO}/messi_ratings_final.csv.gz',
+                usecols=['date', 'country', 'rating', 'rank', 'rating_o', 'rank_o', 'rating_d', 'rank_d'])
 R['date'] = pd.to_datetime(R['date']).dt.date
 G = pd.read_csv(f'{REPO}/all_soccer_games.csv', low_memory=False)
 G['date'] = pd.to_datetime(G['date']); G['d'] = G['date'].dt.date; G['yr'] = G['date'].dt.year
 NEUTRAL = G['neutral'] if 'neutral' in G.columns else pd.Series(False, index=G.index)
 FLAG = {t['name']: t.get('flag', '') for t in json.load(open(f'{REPO}/docs/data/teams_index.json'))}
 
-SNAP = {}
+SNAP, OD_SNAP = {}, {}
 for team, sub in R.sort_values('date').groupby('country'):
     SNAP[team] = (sub['date'].tolist(), sub['rank'].tolist(), sub['rating'].tolist())
+    OD_SNAP[team] = (sub['date'].tolist(), sub['rating_o'].tolist(), sub['rank_o'].tolist(),
+                     sub['rating_d'].tolist(), sub['rank_d'].tolist())
+
+
+def od_asof(team, d):
+    """(rating_o, rank_o, rating_d, rank_d) for `team` as of date d, or None x4."""
+    s = OD_SNAP.get(team)
+    if not s or not s[0]:
+        return (None, None, None, None)
+    i = bisect_right(s[0], d) - 1
+    if i < 0:
+        return (None, None, None, None)
+    return (None if pd.isna(s[1][i]) else round(float(s[1][i]), 2),
+            None if pd.isna(s[2][i]) else int(s[2][i]),
+            None if pd.isna(s[3][i]) else round(float(s[3][i]), 2),
+            None if pd.isna(s[4][i]) else int(s[4][i]))
 
 
 def rating_pre(team, d):
@@ -194,9 +211,11 @@ def build_snapshot(ed, fr):
     for t in ed['order']:
         alive = (t == ed['champ']) if complete else ((t, fr) in ed['tg'])
         rr = reach[t]
+        od = od_asof(t, asof)
         teams.append({
             'team': t, 'flag': FLAG.get(t, ''),
             'rating': round(rating_asof(t, asof) or 0.0, 2), 'rank': rank_asof(t, asof),
+            'rating_o': od[0], 'rank_o': od[1], 'rating_d': od[2], 'rank_d': od[3],
             'eliminated': (not alive),
             'champ': round(rr['champ'], 6), 'final': round(rr['final'], 6), 'sf': round(rr['sf'], 6),
             'qf': round(rr['qf'], 6), 'r16': round(rr['r16'], 6), 'r32': round(rr['r32'], 6),

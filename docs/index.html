@@ -1736,7 +1736,7 @@ function renderWcView() {
   const rows = ordered.map((t, i) => {
     const slug = nameToSlug[t.team];
     const conf = nameToConf[t.team];
-    const confB = conf ? `<span style="margin-left:6px">${wcConfBadge(conf)}</span>` : '';
+    const confB = conf ? `<div style="margin-top:2px">${wcConfBadge(conf)}</div>` : '';
     const inner = `<span style="margin-right:5px">${t.flag || ''}</span>${t.team}${confB}`;
     const teamTd = slug
       ? `<td class="team-cell linked" data-team-slug="${slug}">${inner}</td>`
@@ -1745,6 +1745,8 @@ function renderWcView() {
       <td class="rank-cell">${i + 1}</td>
       ${teamTd}
       <td class="col-num rating-cell od-cell">${fmtOD(t.rating, t.rank)}</td>
+      <td class="rating-cell od-cell col-hide-mobile">${fmtOD(t.rating_o, t.rank_o)}</td>
+      <td class="rating-cell od-cell col-hide-mobile">${fmtOD(t.rating_d, t.rank_d)}</td>
       ${resultsCell(t)}
       ${showR16 ? heatCell(t, 'r16', 'col-hide-mobile') : ''}${heatCell(t, 'qf', 'col-hide-mobile')}${heatCell(t, 'sf')}${heatCell(t, 'final')}
       ${champCell(t)}
@@ -1754,6 +1756,8 @@ function renderWcView() {
     <thead><tr>
       <th style="text-align:center">🏆 Rank</th><th>Country</th>
       <th class="col-num">Rating</th>
+      <th class="col-hide-mobile col-num" title="Attacking strength: goals scored vs an average opponent. Sums with Defense to Rating.">OFF</th>
+      <th class="col-hide-mobile col-num" title="Defending strength: goals prevented vs an average opponent. Sums with Offense to Rating.">DEF</th>
       <th>Results</th>
       ${showR16 ? '<th class="col-num wc-col col-hide-mobile">R16</th>' : ''}<th class="col-num wc-col col-hide-mobile">QF</th>
       <th class="col-num wc-col">SF</th><th class="col-num wc-col">Final</th>

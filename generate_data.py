@@ -310,6 +310,28 @@ for _country, _sub in df[['country', 'date', 'rank', 'rating']].dropna(subset=['
     _sub = _sub.sort_values('date')
     _team_snaps[_country] = (list(_sub['date']), list(_sub['rank']), list(_sub['rating']))
 
+# Parallel offense/defense series (rating_o/rank_o/rating_d/rank_d) for as-of-date
+# lookups, kept separate so _team_snaps' (dates, ranks, ratings) shape is untouched.
+_od_snaps = {}
+for _country, _sub in df[['country', 'date', 'rating_o', 'rank_o', 'rating_d', 'rank_d']].dropna(subset=['date']).groupby('country'):
+    _sub = _sub.sort_values('date')
+    _od_snaps[_country] = (list(_sub['date']), list(_sub['rating_o']), list(_sub['rank_o']),
+                           list(_sub['rating_d']), list(_sub['rank_d']))
+
+
+def _od_asof(team, asof):
+    """(rating_o, rank_o, rating_d, rank_d) for `team` as of `asof`, or latest if None."""
+    _s = _od_snaps.get(team)
+    if not _s or not _s[0]:
+        return (None, None, None, None)
+    _i = (len(_s[0]) - 1) if asof is None else (bisect_right(_s[0], asof.date() if hasattr(asof, 'date') else asof) - 1)
+    if _i < 0:
+        return (None, None, None, None)
+    return (None if pd.isna(_s[1][_i]) else round(float(_s[1][_i]), 2),
+            None if pd.isna(_s[2][_i]) else int(_s[2][_i]),
+            None if pd.isna(_s[3][_i]) else round(float(_s[3][_i]), 2),
+            None if pd.isna(_s[4][_i]) else int(_s[4][_i]))
+
 
 def country_standing(country, match_date, inclusive=False):
     """A country's (rank, rating) relative to match_date; None if unknown.
@@ -1635,9 +1657,11 @@ if _nteams >= 4:
                          reverse=True):
             _r = _reach[_t]
             _elim = (_t in _eliminated) or (_qual_set is not None and _t not in _qual_set)
+            _od = _od_asof(_t, _asof)
             _entry = {
                 'team': _t, 'flag': country_flag(_t), 'rating': round(float(_cur[_t]), 2),
                 'rank': _rating_rank_asof(_t, _asof)[1],   # global MESSI rank (as-of date when re-simming)
+                'rating_o': _od[0], 'rank_o': _od[1], 'rating_d': _od[2], 'rank_d': _od[3],
                 'group': _gidx[_t], 'eliminated': bool(_elim),
                 'champ': _r['champ'] / _NSIM, 'final': _r['final'] / _NSIM, 'sf': _r['sf'] / _NSIM,
                 'qf': _r['qf'] / _NSIM, 'r16': _r['r16'] / _NSIM, 'r32': _r['r32'] / _NSIM,
