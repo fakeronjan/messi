@@ -562,6 +562,7 @@ let teamsIndex        = null;
 let teamCache         = {};
 let nameToSlug        = {};  // country name → slug, built from teamsIndex
 let nameToConf        = {};  // country name → confederation, for the WC Odds badge
+let nameToFlag        = {};  // country name → flag emoji, for WC-view opponents
 
 // Pill state (replaces league-filter / league-select / history-league-filter / goat-league-filter dropdowns)
 let standingsConf  = 'all';
@@ -679,11 +680,17 @@ function renderLastMatch(raw, season, isStale, tsViewLink, pens) {
   const [, letter, score, venue, opponent, comp] = m;
   const pensTag = pens ? ` <span class="wc-so">p</span>` : '';   // shootout marker, as in Knockout Odds
   const slug = nameToSlug[opponent.trim()];
+  // In the WC view: show the opponent's flag (like Knockout Odds) and drop the
+  // redundant "(N)" - every World Cup game is at a neutral host anyway.
+  const isWc = tsViewLink === 'worldcup';
+  const flag = isWc ? (nameToFlag[opponent.trim()] || '') : '';
+  const oppLabel = flag ? `${flag} ${opponent}` : opponent;
+  const venueShown = isWc ? venue.replace(/\s*\(N\)/, '') : venue;
   const oppHtml = slug
-    ? `<span class="team-link linked" data-team-slug="${slug}" data-season="${season}"${tsViewLink ? ` data-ts-view="${tsViewLink}"` : ''}>${opponent}</span>`
-    : opponent;
+    ? `<span class="team-link linked" data-team-slug="${slug}" data-season="${season}"${tsViewLink ? ` data-ts-view="${tsViewLink}"` : ''}>${oppLabel}</span>`
+    : oppLabel;
   const compStr = comp ? ` ${comp}` : '';
-  return `<span class="${rc}">${letter} ${score}${pensTag} ${venue} ${oppHtml}${compStr}</span>`;
+  return `<span class="${rc}">${letter} ${score}${pensTag} ${venueShown} ${oppHtml}${compStr}</span>`;
 }
 
 // ── Deep-link handlers ──────────────────────────────────────────────────────
@@ -1063,10 +1070,12 @@ async function loadTeamsIndex() {
     teamsIndex = await res.json();
     nameToSlug = {};
     nameToConf = {};
+    nameToFlag = {};
     teamsIndex.forEach(t => {
       nameToSlug[t.name] = t.slug;
       nameToConf[t.name] = t.confederation;
-      (t.historical_names || []).forEach(h => { nameToSlug[h] = t.slug; nameToConf[h] = t.confederation; });
+      nameToFlag[t.name] = t.flag;
+      (t.historical_names || []).forEach(h => { nameToSlug[h] = t.slug; nameToConf[h] = t.confederation; nameToFlag[h] = t.flag; });
     });
     populateWcCountries();   // FIFA World Cup tab's History by Country dropdown
   } catch(e) {
