@@ -1560,16 +1560,20 @@ function renderUpsets() {
       <td style="text-align:center;font-variant-numeric:tabular-nums">${u.edition}</td>
       <td style="text-align:center">${u.round}</td>
       <td class="team-cell" style="text-align:right">${teamHtml(u.winner, u.winner_flag)}</td>
+      <td class="rating-cell od-cell">${fmtOD(u.winner_rating, u.winner_rank)}</td>
       <td style="text-align:center;font-variant-numeric:tabular-nums;white-space:nowrap">${u.gf}-${u.ga}${u.pens ? ' <span class="wc-so">p</span>' : ''}</td>
       <td class="team-cell">${teamHtml(u.loser, u.loser_flag)}</td>
+      <td class="rating-cell od-cell">${fmtOD(u.loser_rating, u.loser_rank)}</td>
       <td class="sort-col col-num" style="font-variant-numeric:tabular-nums">${Math.round(u.win_prob * 100)}%</td>
     </tr>`).join('');
   wrap.innerHTML = `<table style="width:auto;margin:0 auto">
     <thead><tr>
       <th>#</th><th style="text-align:center">Edition</th><th style="text-align:center">Round</th>
-      <th style="text-align:right">Winner</th>
+      <th style="text-align:right">Winner (underdog)</th>
+      <th class="col-num">Rating</th>
       <th style="text-align:center">Score</th>
-      <th>Lost to (favorite)</th>
+      <th>Loser (favorite)</th>
+      <th class="col-num">Rating</th>
       <th class="sort-col col-num" title="The winner's pre-game win probability from the Poisson goals model + the as-of-date ratings. Lower = bigger upset.">Winner's<br>odds</th>
     </tr></thead><tbody>${rows}</tbody></table>`;
   attachLinks();

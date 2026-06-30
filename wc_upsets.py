@@ -12,7 +12,7 @@ from bisect import bisect_left
 
 REPO = os.path.dirname(os.path.abspath(__file__))   # run from the repo root
 
-R = pd.read_csv(f'{REPO}/messi_ratings_final.csv.gz', usecols=['date', 'country', 'rating'])
+R = pd.read_csv(f'{REPO}/messi_ratings_final.csv.gz', usecols=['date', 'country', 'rating', 'rank'])
 R['date'] = pd.to_datetime(R['date']).dt.date
 G = pd.read_csv(f'{REPO}/all_soccer_games.csv', low_memory=False)
 G['date'] = pd.to_datetime(G['date']); G['d'] = G['date'].dt.date; G['yr'] = G['date'].dt.year
@@ -21,15 +21,22 @@ FLAG = {t['name']: t.get('flag', '') for t in json.load(open(f'{REPO}/docs/data/
 
 SNAP = {}
 for team, sub in R.sort_values('date').groupby('country'):
-    SNAP[team] = (sub['date'].tolist(), sub['rating'].tolist())
+    SNAP[team] = (sub['date'].tolist(), sub['rating'].tolist(), sub['rank'].tolist())
+
+
+def _pre(team, d):
+    """(rating, rank) strictly before date d (the going-in value), or (None, None)."""
+    s = SNAP.get(team)
+    if not s:
+        return (None, None)
+    i = bisect_left(s[0], d)
+    if i <= 0:
+        return (None, None)
+    return (s[1][i - 1], None if pd.isna(s[2][i - 1]) else int(s[2][i - 1]))
 
 
 def rating_pre(team, d):
-    s = SNAP.get(team)
-    if not s:
-        return None
-    i = bisect_left(s[0], d)
-    return s[1][i - 1] if i > 0 else None
+    return _pre(team, d)[0]
 
 
 # ── Poisson fit (copied) ────────────────────────────────────────────────────
@@ -100,7 +107,7 @@ for yr in range(1986, 2027):
         cnt[a] = cnt.get(a, 0) + 1; cnt[b] = cnt.get(b, 0) + 1; elim.add(l)
     ko_size = 2 * r1games if r1games else 16
     for rd, w, l, r in games:
-        rw, rl = rating_pre(w, r['d']), rating_pre(l, r['d'])
+        (rw, rkw), (rl, rkl) = _pre(w, r['d']), _pre(l, r['d'])
         if rw is None or rl is None:
             continue
         wp = win_prob(rw, rl)
@@ -108,7 +115,8 @@ for yr in range(1986, 2027):
         so = r['shootout_winner'] if isinstance(r.get('shootout_winner'), str) and r['shootout_winner'].strip() else None
         upsets.append({
             'edition': yr, 'round': STAGE.get(ko_size // (2 ** (rd - 1)), f'R{ko_size//2**(rd-1)}'),
-            'winner': w, 'winner_flag': FLAG.get(w, ''), 'loser': l, 'loser_flag': FLAG.get(l, ''),
+            'winner': w, 'winner_flag': FLAG.get(w, ''), 'winner_rating': round(rw, 2), 'winner_rank': rkw,
+            'loser': l, 'loser_flag': FLAG.get(l, ''), 'loser_rating': round(rl, 2), 'loser_rank': rkl,
             'gf': gf, 'ga': ga, 'pens': bool(so), 'date': str(r['d']), 'win_prob': round(wp, 4),
         })
 
