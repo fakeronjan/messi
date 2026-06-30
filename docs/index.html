@@ -643,13 +643,13 @@ function wcConfBadge(conf, wonContinental) {
 
 function finishBadge(finishes) {
   // finishes: list of {tournament, finish} where tournament is short label (WC, Euro, Copa, etc.)
-  // Renders ZIDANE-style colored pills, e.g. "WC 👑", "Euro 🏆", "Copa 🥈"
-  // 👑 reserved for FIFA World Cup gold (THE singular global championship);
-  // 🏆 for continental tournament gold (Euro, Copa, AFCON, etc.)
+  // Renders ZIDANE-style colored pills, e.g. "WC 🏆", "Euro 🏆", "Copa 🥈"
+  // 🏆 for all tournament gold - the World Cup trophy fits its imagery, and the
+  // tournament label already distinguishes a WC win from a continental one.
   if (!finishes || !finishes.length) return '';
   const cls = (f) => f === 1 ? 'finish-champion' : (f === 2 ? 'finish-runner' : 'finish-bronze');
   const medal = (x) => {
-    if (x.finish === 1) return x.tournament === 'WC' ? '👑' : '🏆';
+    if (x.finish === 1) return '🏆';
     if (x.finish === 2) return '🥈';
     return '🥉';
   };
@@ -1164,12 +1164,12 @@ function fmtRecord(rec) {
   return `${rec} <span style="color:#888;font-size:0.85em">(${pts})</span>`;
 }
 
-// World Cup finish medal: 👑 WC gold, 🥈 runner-up, 🥉 third. Mirrors
+// World Cup finish medal: 🏆 WC gold, 🥈 runner-up, 🥉 third. Mirrors
 // finishBadge's glyphs. Returned bare; rendered on its OWN line atop the cell.
 function wcMedal(finishes) {
   const wc = (finishes || []).find(x => x.tournament === 'WC');
   if (!wc) return '';
-  return wc.finish === 1 ? '👑' : wc.finish === 2 ? '🥈' : wc.finish === 3 ? '🥉' : '';
+  return wc.finish === 1 ? '🏆' : wc.finish === 2 ? '🥈' : wc.finish === 3 ? '🥉' : '';
 }
 
 // World Cup edition record cell, top to bottom:
@@ -1470,8 +1470,9 @@ function renderLeagueHistory(league, targetId = 'history-table-wrap') {
     return;
   }
 
-  // 👑 reserved for FIFA World Cup champion counts; other tournaments use 🏆
-  const champEmoji = league === 'FIFA World Cup' ? '👑' : '🏆';
+  // 🏆 for all champion counts - the World Cup trophy fits its imagery, matching
+  // the continental tournaments rather than a crown.
+  const champEmoji = '🏆';
 
   function teamCell(t, bg, season, preRated) {
     if (!t) return `<td class="${bg}" colspan="4" style="text-align:center;color:#aaa">-</td>`;
