@@ -227,7 +227,7 @@ def build_snapshot(ed, fr):
 
 # ── Build all editions ──────────────────────────────────────────────────────
 buckets = []
-for yr in range(1986, 2023, 4):
+for yr in range(1990, 2023, 4):   # ratings start at 1990 (1986 suppressed: window warm-up)
     ed = edition(yr)
     snaps = [build_snapshot(ed, fr) for fr in range(1, ed['nrd'] + 2)]   # R16..Champion
     buckets.append({'tournament': 'FIFA World Cup', 'edition': yr, 'snapshots': snaps})
@@ -239,6 +239,8 @@ if WRITE:
     existing = {(b['tournament'], b['edition']): b for b in hist['tournaments']}
     for b in buckets:
         existing[(b['tournament'], b['edition'])] = b          # replace/add retro editions
+    # Drop any suppressed pre-1990 editions left from an earlier retro run (e.g. 1986).
+    existing = {k: v for k, v in existing.items() if v['edition'] >= 1990}
     hist['tournaments'] = sorted(existing.values(), key=lambda b: b['edition'], reverse=True)  # newest first
     json.dump(hist, open(f'{REPO}/docs/data/wc_odds_history.json', 'w'), separators=(',', ':'))
     print(f"WROTE {len(hist['tournaments'])} editions to wc_odds_history.json")

@@ -84,7 +84,7 @@ def ko_winner(r):
 
 STAGE = {32: 'R32', 16: 'R16', 8: 'QF', 4: 'SF', 2: 'Final'}
 upsets = []
-for yr in range(1986, 2027):
+for yr in range(1990, 2027):   # ratings start at 1990 (1986-89 suppressed: window warm-up)
     e = G[(G['tournament'] == 'FIFA World Cup') & (G['yr'] == yr)].sort_values('date').reset_index(drop=True)
     if not len(e):
         continue

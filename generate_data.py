@@ -333,6 +333,18 @@ def _od_asof(team, asof):
             None if pd.isna(_s[4][_i]) else int(_s[4][_i]))
 
 
+# Suppress pre-1990 ratings site-wide. 1986 (the first modeled edition) is the
+# rolling window's warm-up: thin per-team samples (~30 games) and the host
+# (Mexico '86) goes unrated until mid-tournament, so those ratings are unstable.
+# Nothing is deleted - messi_ratings*.csv.gz keep 1986-89; we just stop DISPLAYING
+# ratings before 1990. _team_snaps/_od_snaps above are built from the full series
+# first, so the Poisson model + WC sim are unaffected - only the standings / team /
+# GOAT / seasons / champions JSON below see the cutoff. Pre-1990 champions fall
+# into the existing pre_rated gray-dash path (_first_rated_year becomes 1990).
+RATINGS_START = pd.Timestamp('1990-01-01')
+df = df[pd.to_datetime(df['date'], errors='coerce') >= RATINGS_START].reset_index(drop=True)
+
+
 def country_standing(country, match_date, inclusive=False):
     """A country's (rank, rating) relative to match_date; None if unknown.
     inclusive=False -> latest snapshot strictly BEFORE the date (going-in value);
