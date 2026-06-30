@@ -1648,7 +1648,7 @@ function wcBuildControls() {
     buckets.forEach(b => {
       const o = document.createElement('option');
       o.value = String(b.edition);
-      o.textContent = `${b.edition} ${b.tournament}`;
+      o.textContent = String(b.edition);   // year only - the whole tab is the FIFA World Cup
       tourSel.appendChild(o);
     });
     if (bucket) tourSel.value = String(bucket.edition);
