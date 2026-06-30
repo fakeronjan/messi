@@ -783,6 +783,12 @@ function attachLinks() {
       seasonLinkClick(el.dataset.seasonLink, el.dataset.targetConf);
     });
   });
+  document.querySelectorAll('[data-wc-edition].linked').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showWcOddsEdition(el.dataset.wcEdition);
+    });
+  });
 }
 
 // Strip legacy "no game yet" placeholders so empty cells render as a single
@@ -879,14 +885,26 @@ async function renderWcByCountry(slug) {
   renderTeamTable({ view: 'worldcup', selectId: 'wc-country-select', wrapId: 'wc-bycountry-wrap',
                     chartWrap: 'wc-bycountry-chart-wrap', chartSvg: 'wc-bycountry-chart' });
 }
-// Deep-link from a WC-match opponent (data-ts-view="worldcup") into this view.
-function showWcByCountry(slug) {
+function activateWcTab() {
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
   document.getElementById('wc-odds-nav').classList.add('active');
   document.getElementById('wc-odds').classList.add('active');
+}
+// Deep-link from a WC-match opponent (data-ts-view="worldcup") into this view.
+function showWcByCountry(slug) {
+  activateWcTab();
   setWcSubview('bycountry');
   renderWcByCountry(slug);
+}
+// Year cells in Historical Podiums / History by Country jump to that edition's Knockout Odds.
+function showWcOddsEdition(year) {
+  activateWcTab();
+  setWcSubview('odds');
+  wcSelectedEdition = parseInt(year, 10);
+  wcViewKey = null;          // latest state of the chosen edition
+  wcBuildControls();
+  renderWcView();
 }
 
 // ── Standings ────────────────────────────────────────────────────────────────
@@ -1281,7 +1299,7 @@ function renderTeamTable(opts = {}) {
       ? `${g.season}<div style="font-size:10px;color:#999;font-style:italic;line-height:1.2">${era}</div>`
       : g.season;
     return `<tr>
-    <td class="linked" data-season-link="${g.season}" data-target-conf="${targetConf}" style="font-size:11px;color:#555;text-align:center">${seasonCell}</td>
+    <td class="linked" ${view === 'worldcup' ? `data-wc-edition="${g.season}"` : `data-season-link="${g.season}" data-target-conf="${targetConf}"`} style="font-size:11px;color:#555;text-align:center">${seasonCell}</td>
     ${view === 'worldcup' ? '' : `<td style="white-space:nowrap;color:#888;font-size:12px">${dateCell}</td>`}
     ${view === 'worldcup'
       ? wcWalkCell(g.wc_record && g.wc_record.team_walk) + wcMatchesCell(g)
@@ -1487,7 +1505,7 @@ function renderLeagueHistory(league, targetId = 'history-table-wrap') {
     const sbSuffix = preRated ? ' <sup style="color:#888">†</sup>' : '';
     const yearTd = preRated
       ? `<td class="season-cell" style="white-space:nowrap;text-align:center">${e.season}${hostStr}${sbSuffix}</td>`
-      : `<td class="season-cell linked" data-season-link="${e.season}" data-target-conf="${targetConf}" style="white-space:nowrap;text-align:center">${e.season}${hostStr}</td>`;
+      : `<td class="season-cell linked" ${league === 'FIFA World Cup' ? `data-wc-edition="${e.season}"` : `data-season-link="${e.season}" data-target-conf="${targetConf}"`} style="white-space:nowrap;text-align:center">${e.season}${hostStr}</td>`;
     const rowStyle = preRated ? ' style="background:#fafafa"' : '';
     return `<tr${rowStyle}>
     ${yearTd}
