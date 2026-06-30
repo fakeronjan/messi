@@ -865,7 +865,7 @@ function populateWcCountries() {
   const sel = document.getElementById('wc-country-select');
   if (!sel || !teamsIndex) return;
   sel.innerHTML = '<option value="">- Select a country -</option>';
-  teamsIndex.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach(t => {
+  teamsIndex.filter(t => t.wc).sort((a, b) => a.name.localeCompare(b.name)).forEach(t => {
     const opt = document.createElement('option');
     opt.value = t.slug;
     opt.textContent = t.flag ? `${t.flag} ${t.name}` : t.name;

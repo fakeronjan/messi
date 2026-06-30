@@ -772,6 +772,7 @@ for team in all_teams:
     teams_index.append(idx_entry)
 
     seasons = {}
+    _has_wc = False   # any World Cup appearance (1990+) -> shown in the WC tab's country dropdown
     for season, sdf in tdf.groupby('year'):
         if pd.isna(season):
             continue
@@ -817,7 +818,11 @@ for team in all_teams:
             else:
                 rows[-1]['wc_record'] = _wc_rec_year
                 rows[-1]['wc_in_progress'] = 1
+            _has_wc = True
         seasons[int(season)] = rows
+
+    if _has_wc:
+        idx_entry['wc'] = 1
 
     team_doc = {'team': team, 'flag': flag, 'confederation': confed, 'seasons': seasons}
     if hist_names:
