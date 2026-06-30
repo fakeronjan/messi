@@ -310,6 +310,7 @@
   #team-table-wrap,
   #wc-odds-wrap,
   #wc-upsets-wrap,
+  #wc-history-wrap,
   #goat-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
   @media (max-width: 600px) {
@@ -1416,8 +1417,8 @@ function renderLeagueHistory(league, targetId = 'history-table-wrap') {
       : '';
     const sbSuffix = preRated ? ' <sup style="color:#888">†</sup>' : '';
     const yearTd = preRated
-      ? `<td class="season-cell" style="white-space:nowrap">${e.season}${hostStr}${sbSuffix}</td>`
-      : `<td class="season-cell linked" data-season-link="${e.season}" data-target-conf="${targetConf}" style="white-space:nowrap">${e.season}${hostStr}</td>`;
+      ? `<td class="season-cell" style="white-space:nowrap;text-align:center">${e.season}${hostStr}${sbSuffix}</td>`
+      : `<td class="season-cell linked" data-season-link="${e.season}" data-target-conf="${targetConf}" style="white-space:nowrap;text-align:center">${e.season}${hostStr}</td>`;
     const rowStyle = preRated ? ' style="background:#fafafa"' : '';
     return `<tr${rowStyle}>
     ${yearTd}
@@ -1434,7 +1435,7 @@ function renderLeagueHistory(league, targetId = 'history-table-wrap') {
   document.getElementById(targetId).innerHTML = `
     <table>
       <thead><tr>
-        <th>Year</th>
+        <th class="col-num">Year</th>
         <th class="col-champ">Champion</th>
         <th class="col-champ col-hide-mobile col-num">OVR #</th>
         <th class="col-champ col-hide-mobile col-num">Conf #</th>
