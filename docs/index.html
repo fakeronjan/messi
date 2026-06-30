@@ -1788,7 +1788,7 @@ function renderWcView() {
         const when = k.date ? ` <span class="wc-when">(${k.date.slice(5)})</span>` : '';
         parts.push(`${rd} ${opp}${when}`);
       } else {
-        const pens = k.pens ? ' p' : '';
+        const pens = k.pens ? ' <span class="wc-so">p</span>' : '';
         parts.push(`${rd} <span class="${k.won ? 'wc-w' : 'wc-l'}">${k.won ? 'W' : 'L'} ${k.gf}-${k.ga}${pens}</span> ${opp}`);
       }
     });
