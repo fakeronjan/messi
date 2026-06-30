@@ -313,6 +313,18 @@
   #wc-history-wrap,
   #goat-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
+  /* The Historical Summary table has 13 columns and is wider than the 1100px tab.
+     Let this one view span the viewport (centered breakout) so it uses the page
+     margin instead of being locked into the tab and scrolling with empty space
+     alongside. It still scrolls (inside #wc-history-wrap) only when the window
+     itself is too narrow to fit the table. */
+  #wc-history-view {
+    width: min(98vw, 1340px);
+    position: relative;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
   @media (max-width: 600px) {
     header { padding: 14px 16px 12px; }
     header h1 { font-size: 20px; letter-spacing: 2px; }
