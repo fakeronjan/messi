@@ -39,6 +39,9 @@ jobs:
       - name: Compute knockout upsets
         run: python wc_upsets.py --write
 
+      - name: Validate odds calibration
+        run: python wc_calibration.py --write
+
       - name: Commit and push updated data
         run: |
           git config user.name  "MESSI Bot"

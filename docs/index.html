@@ -529,6 +529,7 @@
     </div>
     <div id="wc-odds-stamp" class="wc-stamp"></div>
     <div id="wc-odds-wrap"><p class="loading">Loading World Cup odds...</p></div>
+    <p class="data-note" id="wc-calib-note" style="text-align:center;margin-top:12px;font-style:italic"></p>
   </div>
   <div id="wc-upsets-view" style="display:none">
     <p class="data-note" id="wc-upsets-note"></p>
@@ -1636,6 +1637,7 @@ let wcHistory = null;    // {tournaments:[{tournament, edition, snapshots:[...]}
 let wcViewKey = null;    // selected snapshot's "phase-games_left" key; null = latest/live
 let wcSelectedEdition = null;  // selected edition (null = the live / most-recent one)
 let wcUpsets = null;           // biggest knockout upsets across all editions
+let wcCalib = null;            // backtest accuracy of the historical odds
 async function loadWcOdds() {
   try {
     const res = await fetch(`${BASE}/wc_odds.json`);
@@ -1649,6 +1651,14 @@ async function loadWcOdds() {
     const res = await fetch(`${BASE}/wc_upsets.json`);
     wcUpsets = await res.json();
   } catch(e) { wcUpsets = null; }
+  try {
+    const res = await fetch(`${BASE}/wc_calibration.json`);
+    wcCalib = await res.json();
+  } catch(e) { wcCalib = null; }
+  const cn = document.getElementById('wc-calib-note');
+  if (cn && wcCalib) {
+    cn.textContent = `Tested against every World Cup since ${wcCalib.first_year}, these odds land within about ${Math.round(wcCalib.avg_error_pts)} points of what actually happens`;
+  }
   renderWcOdds();
 }
 
