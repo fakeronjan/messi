@@ -390,9 +390,20 @@ for _, g in games[games['tournament'] == 'FIFA World Cup'].iterrows():
 # rating - in date order, for the per-edition match list cell. Knockout pens
 # wins/losses are tracked separately (pens_w/pens_l) so the frontend can fold
 # them into the knockout W-L and still annotate the shootouts.
+# Round labels (G / R32 / R16 / QF / SF / F) for the match list, derived per
+# edition from the team count: 48-team editions (2026+) run a 32-team knockout
+# (R32 entry, depth 5); 24/32-team editions run a 16-team knockout (R16 entry,
+# depth 4). Team-count-driven so the label is right even mid-tournament (before
+# later rounds are played) and a new format adapts on its own.
+ROUNDS_FULL = ['R64', 'R32', 'R16', 'QF', 'SF', 'F']
+_ed_nteams = {}
+for (_t, _y) in _wc_team_games:
+    _ed_nteams[_y] = _ed_nteams.get(_y, 0) + 1
+
 _wc_record = {}
 for (team, yr), gl in _wc_team_games.items():
     gl.sort(key=lambda m: m['date'])
+    _ladder = ROUNDS_FULL[-(5 if _ed_nteams.get(yr, 0) >= 48 else 4):]
     rec = {'g_w': 0, 'g_d': 0, 'g_l': 0, 'g_pts': 0, 'k_w': 0, 'k_l': 0, 'pens_w': 0, 'pens_l': 0}
     matches = []
     for i, m in enumerate(gl):
@@ -405,10 +416,20 @@ for (team, yr), gl in _wc_team_games.items():
             letter = 'D'
         venue = ' vs. (N) ' if m['neutral'] else (' vs. ' if m['home'] else ' @ ')
         _st = opp_standing(m['opp'], m['date'])
+        if i < 3:
+            _rd = 'G'
+        else:
+            _ko = i - 3
+            _rd = _ladder[_ko] if _ko < len(_ladder) else (_ladder[-1] if _ladder else 'KO')
+            if _rd == 'F' and i >= 1:   # the SF loser's last game is the 3rd-place playoff
+                _p = gl[i - 1]
+                if not (_p['gf'] > _p['ga'] or (_p['gf'] == _p['ga'] and _p['won_so'])):
+                    _rd = '3rd'
         matches.append({'s': f"{letter} {gf}-{ga}{venue}{display_name_at(m['opp'], m['date']) or m['opp']}",
                         'r': _st[0] if _st else None,
                         'g': _st[1] if _st else None,
-                        'd': f"{m['date'].month:02d}-{m['date'].day:02d}"})
+                        'd': f"{m['date'].month:02d}-{m['date'].day:02d}",
+                        'rd': _rd})
         if i < 3:  # group stage: W-D-L on the scoreboard
             if gf > ga:
                 rec['g_w'] += 1

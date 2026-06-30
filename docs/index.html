@@ -1215,11 +1215,12 @@ function wcMatchesCell(g) {
   const ms = ((g.wc_record && g.wc_record.matches) || []).slice().reverse();
   const html = ms.map(mm => {
     const date = mm.d ? `<span style="color:#999;font-size:0.85em;margin-right:8px;font-variant-numeric:tabular-nums">${mm.d}</span>` : '';
+    const rd = mm.rd ? `<span class="wc-rd" style="margin-right:6px">${mm.rd}</span>` : '';
     const opp = (mm.r != null) ? ` <span style="color:#999;font-size:0.85em">#${mm.r} · ${mm.g.toFixed(2)}</span>` : '';
-    // Wrap match + opp in ONE inline span: in this flex row a bare whitespace
+    // Wrap round + match + opp in ONE inline span: in this flex row a bare whitespace
     // text node between two flex items is dropped, which would kill the space
     // before the opponent rank. Inside a single span it renders normally.
-    return `<div style="height:${WC_ROW}px;display:flex;align-items:center;white-space:nowrap">${date}<span>${renderLastMatch(mm.s, g.season, false, 'worldcup')}${opp}</span></div>`;
+    return `<div style="height:${WC_ROW}px;display:flex;align-items:center;white-space:nowrap">${date}<span>${rd}${renderLastMatch(mm.s, g.season, false, 'worldcup')}${opp}</span></div>`;
   }).join('');
   // baseline + half a row offsets the matches DOWN so each lands between two walk nodes
   return `<td class="last-match-cell" style="padding-top:${WC_PAD + WC_ROW / 2}px;vertical-align:top">${html}</td>`;
