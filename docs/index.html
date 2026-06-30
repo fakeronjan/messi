@@ -1568,7 +1568,7 @@ function renderUpsets() {
     </tr>`).join('');
   wrap.innerHTML = `<table style="width:auto;margin:0 auto">
     <thead><tr>
-      <th>#</th><th style="text-align:center">Edition</th><th style="text-align:center">Round</th>
+      <th class="col-num">Rank</th><th style="text-align:center">Year</th><th style="text-align:center">Round</th>
       <th style="text-align:right">Winner (underdog)</th>
       <th class="col-num">Rating</th>
       <th style="text-align:center">Score</th>
@@ -1823,7 +1823,7 @@ function renderWcView() {
   }).join('');
   document.getElementById('wc-odds-wrap').innerHTML = `<table class="wc-odds-table">
     <thead><tr>
-      <th style="text-align:center;width:52px">🏆 Rank</th><th style="width:158px">Country</th>
+      <th style="text-align:center;width:80px">🏆 Rank</th><th style="width:152px">Country</th>
       <th class="col-num" style="width:60px">Rating</th>
       <th class="col-hide-mobile col-num" style="width:56px" title="Attacking strength: goals scored vs an average opponent. Sums with Defense to Rating.">OFF</th>
       <th class="col-hide-mobile col-num" style="width:56px" title="Defending strength: goals prevented vs an average opponent. Sums with Offense to Rating.">DEF</th>
