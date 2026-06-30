@@ -497,7 +497,7 @@
 <div id="goat" class="tab">
   <div class="league-pills" id="goat-metric-pills"></div>
   <div class="league-pills" id="goat-conf-pills"></div>
-  <p class="data-note">Top 50 ratings, taken at the end of each major tournament. Eligibility requires winning a major continental trophy (or finishing 2nd in the FIFA World Cup) in that year. Data covers 1986 through the current year. OFF and DEF split each rating into attacking and defending strength, which sum back to Rating; the Offense and Defense tabs rank the best attacking and defending sides.</p>
+  <p class="data-note">Top 50 ratings, taken at the end of each major tournament. Eligibility requires winning a major continental trophy (or finishing 2nd in the FIFA World Cup) in that year. Data covers 1990 through the current year. OFF and DEF split each rating into attacking and defending strength, which sum back to Rating; the Offense and Defense tabs rank the best attacking and defending sides.</p>
   <div id="goat-table-wrap"><p class="loading">Loading GOAT table...</p></div>
 </div>
 
@@ -1173,7 +1173,7 @@ function renderTeamTable() {
     if (rows.length === 0) {
       document.getElementById('chart-wrap').style.display = 'none';
       document.getElementById('team-table-wrap').innerHTML =
-        '<p class="loading">No FIFA World Cup appearances since 1986</p>';
+        '<p class="loading">No FIFA World Cup appearances since 1990</p>';
       return;
     }
   } else {
@@ -1423,7 +1423,7 @@ function renderLeagueHistory(league) {
   }).join('');
 
   const footnote = anyPreRated
-    ? '<p style="font-size:11px;color:#888;margin-top:8px"><sup>†</sup> Pre-1986 editions. Results shown for completeness; teams from these tournaments are not modeled in ratings (MESSI ratings start in 1986 once the 200-game-day rolling window fills).</p>'
+    ? '<p style="font-size:11px;color:#888;margin-top:8px"><sup>†</sup> Pre-1990 editions. Results shown for completeness; ratings aren\'t shown before 1990, where the model\'s rolling window is still too thin to rate teams reliably.</p>'
     : '';
 
   document.getElementById('history-table-wrap').innerHTML = `
@@ -1550,7 +1550,7 @@ function renderUpsets() {
   if (!wrap) return;
   const ups = ((wcUpsets && wcUpsets.upsets) || []).filter(u => u.win_prob < 0.5).slice(0, 25);
   if (!ups.length) { wrap.innerHTML = '<p class="loading">No upsets yet</p>'; return; }
-  note.textContent = 'The biggest knockout upsets across every World Cup since 1986 - games the model gave the winner less than an even chance, sorted by the winner\'s pre-game win probability (lower = bigger shock).';
+  note.textContent = 'The biggest knockout upsets across every World Cup since 1990 - games the model gave the winner less than an even chance, sorted by the winner\'s pre-game win probability (lower = bigger shock).';
   const teamHtml = (name, flag) => {
     const slug = nameToSlug[name];
     return slug ? `<span class="team-link linked" data-team-slug="${slug}">${flag || ''} ${name}</span>` : `${flag || ''} ${name}`;
@@ -1684,7 +1684,7 @@ function renderWcView() {
   }
   const teams = (view && view.teams) || [];
   if (!teams.length) return;
-  // 16-team-knockout editions (1986-2022) start at R16, so the R16 column is a
+  // 16-team-knockout editions (1990-2022) start at R16, so the R16 column is a
   // trivial 100% - hide it. 48-team editions (R32 round) keep it.
   const koSize = Math.max(0, (view.games_left || 0) + 1, ...snaps.map(s => (s.games_left || 0) + 1));
   const showR16 = koSize > 16;
