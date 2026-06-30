@@ -453,7 +453,7 @@
   <button data-tab="wc-odds" id="wc-odds-nav" style="display:none">🏆 FIFA World Cup</button>
   <button class="active" data-tab="standings">Standings</button>
   <button data-tab="team-summary">Country Summary</button>
-  <button data-tab="league-history">Tournaments</button>
+  <button data-tab="league-history">Other Tournaments</button>
   <button data-tab="goat">GOAT Table</button>
 </nav>
 
@@ -487,7 +487,6 @@
 
 <!-- ── LEAGUE HISTORY ────────────────────────────────────────────────────── -->
 <div id="league-history" class="tab">
-  <div class="league-pills" id="history-world-pills" style="margin-bottom:6px"></div>
   <div class="league-pills" id="history-continental-pills" style="margin-bottom:6px"></div>
   <div class="league-pills" id="history-nations-pills"></div>
   <div id="history-table-wrap"><p class="loading">Select a tournament above</p></div>
@@ -505,6 +504,7 @@
   <div class="league-pills" id="wc-subview-pills">
     <button class="active" data-wcview="odds">Knockout Odds</button>
     <button data-wcview="upsets">Knockout Upsets</button>
+    <button data-wcview="history">Historical Summary</button>
   </div>
   <div id="wc-odds-view">
     <h2 id="wc-odds-title" style="margin:4px 0 2px;font-size:18px"></h2>
@@ -519,6 +519,10 @@
   <div id="wc-upsets-view" style="display:none">
     <p class="data-note" id="wc-upsets-note"></p>
     <div id="wc-upsets-wrap"><p class="loading">Loading upsets...</p></div>
+  </div>
+  <div id="wc-history-view" style="display:none">
+    <p class="data-note">Every FIFA World Cup podium, with each side's rating and rank as of that tournament</p>
+    <div id="wc-history-wrap"><p class="loading">Loading World Cup history...</p></div>
   </div>
 </div>
 
@@ -543,7 +547,7 @@ let tsConf         = 'all';
 let goatConf       = 'all';
 let goatMetric     = 'overall';  // 'overall' | 'offense' | 'defense': which leaderboard to rank by
 let tsView         = 'cross';  // 'cross' (all-season summary), 'single' (one season, all game-days), or 'worldcup' (end-of-WC snapshot per World Cup)
-let historyTourny  = 'FIFA World Cup';
+let historyTourny  = 'UEFA Euro';   // FIFA World Cup moved to its own section (Historical Summary pill)
 
 const CONF_OPTIONS = [
   { value: 'UEFA',     label: '🇪🇺 UEFA'     },
@@ -552,9 +556,6 @@ const CONF_OPTIONS = [
   { value: 'AFC',      label: '🌏 AFC'      },
   { value: 'CAF',      label: '🌍 CAF'      },
   { value: 'OFC',      label: '🌏 OFC'      },
-];
-const HISTORY_WORLD = [
-  { value: 'FIFA World Cup', label: '👑 FIFA World Cup' },
 ];
 const HISTORY_CONTINENTAL = [
   { value: 'UEFA Euro',     label: '🇪🇺 UEFA Euro'     },
@@ -809,15 +810,17 @@ document.querySelectorAll('nav button').forEach(btn => {
   });
 });
 
-// FIFA World Cup tab sub-pills: Knockout Odds <-> Knockout Upsets.
+// FIFA World Cup tab sub-pills: Knockout Odds <-> Knockout Upsets <-> Historical Summary.
 document.querySelectorAll('#wc-subview-pills button').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('#wc-subview-pills button').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     const v = btn.dataset.wcview;
-    document.getElementById('wc-odds-view').style.display   = v === 'odds'   ? '' : 'none';
-    document.getElementById('wc-upsets-view').style.display = v === 'upsets' ? '' : 'none';
-    if (v === 'upsets') renderUpsets();
+    document.getElementById('wc-odds-view').style.display    = v === 'odds'    ? '' : 'none';
+    document.getElementById('wc-upsets-view').style.display  = v === 'upsets'  ? '' : 'none';
+    document.getElementById('wc-history-view').style.display = v === 'history' ? '' : 'none';
+    if (v === 'upsets')  renderUpsets();
+    if (v === 'history') renderLeagueHistory('FIFA World Cup', 'wc-history-wrap');
   });
 });
 
@@ -1342,21 +1345,23 @@ async function loadChampions() {
   try {
     const res = await fetch(`${BASE}/champions.json`);
     championsData = await res.json();
-    // Init order runs renderLeagueHistory(historyTourny) before this
-    // fetch resolves - re-render now that the data is available so the
-    // pre-selected FIFA World Cup populates without an extra click.
+    // Init order runs renderLeagueHistory(historyTourny) before this fetch
+    // resolves - re-render now that the data is available so the pre-selected
+    // tournament populates without an extra click. Also fill the FIFA World Cup
+    // section's Historical Summary pill (separate target element).
     renderLeagueHistory(historyTourny);
+    renderLeagueHistory('FIFA World Cup', 'wc-history-wrap');
   } catch(e) {
     document.getElementById('history-table-wrap').innerHTML =
       `<p class="error">Could not load league history</p>`;
   }
 }
 
-function renderLeagueHistory(league) {
+function renderLeagueHistory(league, targetId = 'history-table-wrap') {
   if (!championsData || !league) return;
   const entries = championsData[league] || [];
   if (!entries.length) {
-    document.getElementById('history-table-wrap').innerHTML =
+    document.getElementById(targetId).innerHTML =
       `<p class="loading">No data for this competition</p>`;
     return;
   }
@@ -1426,7 +1431,7 @@ function renderLeagueHistory(league) {
     ? '<p style="font-size:11px;color:#888;margin-top:8px"><sup>†</sup> Pre-1990 editions. Results shown for completeness; ratings aren\'t shown before 1990, where the model\'s rolling window is still too thin to rate teams reliably.</p>'
     : '';
 
-  document.getElementById('history-table-wrap').innerHTML = `
+  document.getElementById(targetId).innerHTML = `
     <table>
       <thead><tr>
         <th>Year</th>
@@ -1858,9 +1863,8 @@ buildPillsFromOpts('goat-metric-pills', [
   { value: 'defense', label: 'Defense only' },
 ], goatMetric, v => { goatMetric = v; loadGoat(); });
 const onHistoryPick = v => { historyTourny = v; renderLeagueHistory(v); };
-buildPillsFromOpts('history-world-pills',       HISTORY_WORLD,       historyTourny, onHistoryPick, ['history-continental-pills', 'history-nations-pills']);
-buildPillsFromOpts('history-continental-pills', HISTORY_CONTINENTAL, historyTourny, onHistoryPick, ['history-world-pills', 'history-nations-pills']);
-buildPillsFromOpts('history-nations-pills',     HISTORY_NATIONS,     historyTourny, onHistoryPick, ['history-world-pills', 'history-continental-pills']);
+buildPillsFromOpts('history-continental-pills', HISTORY_CONTINENTAL, historyTourny, onHistoryPick, ['history-nations-pills']);
+buildPillsFromOpts('history-nations-pills',     HISTORY_NATIONS,     historyTourny, onHistoryPick, ['history-continental-pills']);
 // Load teams_index first so opponent/slug lookups are populated before any
 // table renders - avoids a double-render flash on initial page load.
 (async () => {
