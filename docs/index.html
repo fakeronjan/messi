@@ -1555,6 +1555,18 @@ function renderUpsets() {
     const slug = nameToSlug[name];
     return slug ? `<span class="team-link linked" data-team-slug="${slug}">${flag || ''} ${name}</span>` : `${flag || ''} ${name}`;
   };
+  // Shade the odds column like the Knockout Odds grid: same heat scale (low prob =
+  // pink/shock .. high prob = teal), spanning the shown upsets' range for contrast.
+  const pct = v => v * 100 < 1 ? '&lt;1%' : Math.round(v * 100) + '%';
+  const TEAL = [26, 107, 138], PINK = [255, 110, 180], MAXA = 0.70;
+  const _vs = ups.map(u => u.win_prob), _lo = Math.min(..._vs), _hi = Math.max(..._vs);
+  const heat = v => {
+    if (_hi <= _lo) return '#eef5f8';
+    const t = Math.max(0, Math.min(1, (v - _lo) / (_hi - _lo)));
+    const [c, a] = t >= 0.5 ? [TEAL, (t - 0.5) * 2 * MAXA] : [PINK, (0.5 - t) * 2 * MAXA];
+    const mix = c.map(ch => Math.round(255 * (1 - a) + ch * a));
+    return `rgb(${mix[0]},${mix[1]},${mix[2]})`;
+  };
   const rows = ups.map((u, i) => `<tr>
       <td class="rank-cell">${i + 1}</td>
       <td style="text-align:center;font-variant-numeric:tabular-nums">${u.edition}</td>
@@ -1564,7 +1576,7 @@ function renderUpsets() {
       <td style="text-align:center;font-variant-numeric:tabular-nums;white-space:nowrap">${u.gf}-${u.ga}${u.pens ? ' <span class="wc-so">p</span>' : ''}</td>
       <td class="team-cell">${teamHtml(u.loser, u.loser_flag)}</td>
       <td class="rating-cell od-cell">${fmtOD(u.loser_rating, u.loser_rank)}</td>
-      <td class="sort-col col-num" style="font-variant-numeric:tabular-nums">${Math.round(u.win_prob * 100)}%</td>
+      <td class="col-num wc-heat wc-champ-cell" style="background:${heat(u.win_prob)}">${pct(u.win_prob)}</td>
     </tr>`).join('');
   wrap.innerHTML = `<table style="width:auto;margin:0 auto">
     <thead><tr>
