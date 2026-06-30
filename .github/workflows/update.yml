@@ -36,6 +36,9 @@ jobs:
       - name: Generate web data
         run: python generate_data.py
 
+      - name: Compute knockout upsets
+        run: python wc_upsets.py --write
+
       - name: Commit and push updated data
         run: |
           git config user.name  "MESSI Bot"

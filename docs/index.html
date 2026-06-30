@@ -309,6 +309,7 @@
   #standings-table-wrap,
   #team-table-wrap,
   #wc-odds-wrap,
+  #wc-upsets-wrap,
   #goat-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
   @media (max-width: 600px) {
@@ -449,7 +450,7 @@
 </header>
 
 <nav>
-  <button data-tab="wc-odds" id="wc-odds-nav" style="display:none">🏆 WC Odds</button>
+  <button data-tab="wc-odds" id="wc-odds-nav" style="display:none">🏆 FIFA World Cup</button>
   <button class="active" data-tab="standings">Standings</button>
   <button data-tab="team-summary">Country Summary</button>
   <button data-tab="league-history">Tournaments</button>
@@ -501,14 +502,24 @@
 </div>
 
 <div id="wc-odds" class="tab">
-  <h2 id="wc-odds-title" style="margin:4px 0 2px;font-size:18px"></h2>
-  <p class="data-note" id="wc-odds-note"></p>
-  <div class="controls" id="wc-controls" style="display:none">
-    <select id="wc-tournament-select" style="display:none"></select>
-    <select id="wc-date-select" style="min-width:220px"></select>
+  <div class="league-pills" id="wc-subview-pills">
+    <button class="active" data-wcview="odds">Knockout Odds</button>
+    <button data-wcview="upsets">Knockout Upsets</button>
   </div>
-  <div id="wc-odds-stamp" class="wc-stamp"></div>
-  <div id="wc-odds-wrap"><p class="loading">Loading World Cup odds...</p></div>
+  <div id="wc-odds-view">
+    <h2 id="wc-odds-title" style="margin:4px 0 2px;font-size:18px"></h2>
+    <p class="data-note" id="wc-odds-note"></p>
+    <div class="controls" id="wc-controls" style="display:none">
+      <select id="wc-tournament-select" style="display:none"></select>
+      <select id="wc-date-select" style="min-width:220px"></select>
+    </div>
+    <div id="wc-odds-stamp" class="wc-stamp"></div>
+    <div id="wc-odds-wrap"><p class="loading">Loading World Cup odds...</p></div>
+  </div>
+  <div id="wc-upsets-view" style="display:none">
+    <p class="data-note" id="wc-upsets-note"></p>
+    <div id="wc-upsets-wrap"><p class="loading">Loading upsets...</p></div>
+  </div>
 </div>
 
 <div style="text-align:center;font-size:11px;color:#999;font-style:italic;margin:28px 0 10px;line-height:1.7">
@@ -795,6 +806,18 @@ document.querySelectorAll('nav button').forEach(btn => {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById(btn.dataset.tab).classList.add('active');
+  });
+});
+
+// FIFA World Cup tab sub-pills: Knockout Odds <-> Knockout Upsets.
+document.querySelectorAll('#wc-subview-pills button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#wc-subview-pills button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const v = btn.dataset.wcview;
+    document.getElementById('wc-odds-view').style.display   = v === 'odds'   ? '' : 'none';
+    document.getElementById('wc-upsets-view').style.display = v === 'upsets' ? '' : 'none';
+    if (v === 'upsets') renderUpsets();
   });
 });
 
@@ -1502,6 +1525,7 @@ let wcOddsData = null;   // current/live odds (richest: latest_matchday, n_sims)
 let wcHistory = null;    // {tournaments:[{tournament, edition, snapshots:[...]}]}
 let wcViewKey = null;    // selected snapshot's "phase-games_left" key; null = latest/live
 let wcSelectedEdition = null;  // selected edition (null = the live / most-recent one)
+let wcUpsets = null;           // biggest knockout upsets across all editions
 async function loadWcOdds() {
   try {
     const res = await fetch(`${BASE}/wc_odds.json`);
@@ -1511,7 +1535,44 @@ async function loadWcOdds() {
     const res = await fetch(`${BASE}/wc_odds_history.json`);
     wcHistory = await res.json();
   } catch(e) { wcHistory = null; }
+  try {
+    const res = await fetch(`${BASE}/wc_upsets.json`);
+    wcUpsets = await res.json();
+  } catch(e) { wcUpsets = null; }
   renderWcOdds();
+}
+
+// Knockout Upsets sub-view: every knockout game the model gave the winner less
+// than an even chance, biggest upset (lowest pre-game win probability) first.
+function renderUpsets() {
+  const wrap = document.getElementById('wc-upsets-wrap');
+  const note = document.getElementById('wc-upsets-note');
+  if (!wrap) return;
+  const ups = ((wcUpsets && wcUpsets.upsets) || []).filter(u => u.win_prob < 0.5).slice(0, 25);
+  if (!ups.length) { wrap.innerHTML = '<p class="loading">No upsets yet</p>'; return; }
+  note.textContent = 'The biggest knockout upsets across every World Cup since 1986 - games the model gave the winner less than an even chance, sorted by the winner\'s pre-game win probability (lower = bigger shock).';
+  const teamHtml = (name, flag) => {
+    const slug = nameToSlug[name];
+    return slug ? `<span class="team-link linked" data-team-slug="${slug}">${flag || ''} ${name}</span>` : `${flag || ''} ${name}`;
+  };
+  const rows = ups.map((u, i) => `<tr>
+      <td class="rank-cell">${i + 1}</td>
+      <td style="text-align:center;font-variant-numeric:tabular-nums">${u.edition}</td>
+      <td style="text-align:center">${u.round}</td>
+      <td class="team-cell" style="text-align:right">${teamHtml(u.winner, u.winner_flag)}</td>
+      <td style="text-align:center;font-variant-numeric:tabular-nums;white-space:nowrap">${u.gf}-${u.ga}${u.pens ? ' <span class="wc-so">p</span>' : ''}</td>
+      <td class="team-cell">${teamHtml(u.loser, u.loser_flag)}</td>
+      <td class="sort-col col-num" style="font-variant-numeric:tabular-nums">${Math.round(u.win_prob * 100)}%</td>
+    </tr>`).join('');
+  wrap.innerHTML = `<table style="width:auto;margin:0 auto">
+    <thead><tr>
+      <th>#</th><th style="text-align:center">Edition</th><th style="text-align:center">Round</th>
+      <th style="text-align:right">Winner</th>
+      <th style="text-align:center">Score</th>
+      <th>Lost to (favorite)</th>
+      <th class="sort-col col-num" title="The winner's pre-game win probability from the Poisson goals model + the as-of-date ratings. Lower = bigger upset.">Winner's<br>odds</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+  attachLinks();
 }
 
 // Snapshots for the edition currently shown (the selected one, else the live edition).
