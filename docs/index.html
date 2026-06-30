@@ -1550,7 +1550,7 @@ function renderUpsets() {
   if (!wrap) return;
   const ups = ((wcUpsets && wcUpsets.upsets) || []).filter(u => u.win_prob < 0.5).slice(0, 25);
   if (!ups.length) { wrap.innerHTML = '<p class="loading">No upsets yet</p>'; return; }
-  note.textContent = 'The biggest knockout upsets across every World Cup since 1990 - games the model gave the winner less than an even chance, sorted by the winner\'s pre-game win probability (lower = bigger shock).';
+  note.textContent = 'The biggest knockout upsets across every World Cup since 1990 - games the model gave the winner less than an even chance, sorted by the winner\'s pre-game win probability (lower = bigger shock)';
   const teamHtml = (name, flag) => {
     const slug = nameToSlug[name];
     return slug ? `<span class="team-link linked" data-team-slug="${slug}">${flag || ''} ${name}</span>` : `${flag || ''} ${name}`;
