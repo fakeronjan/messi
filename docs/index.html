@@ -670,19 +670,20 @@ function resultClass(match, isStale) {
 // tournament tag preserved (no abbrevComp on this site). Opponent country
 // names match teamsIndex; flag emojis are kept in cell display but not in
 // last_match strings.
-function renderLastMatch(raw, season, isStale, tsViewLink) {
+function renderLastMatch(raw, season, isStale, tsViewLink, pens) {
   const display = displayMatch(raw);
   if (!display) return '-';
   const rc = resultClass(raw, isStale);
   const m = display.match(/^([WLD])\s+(\d+\s*-\s*\d+)\s+(vs\.?(?:\s*\(N\))?|@)\s+(.+?)\s*(\([^)]+\))?\s*$/);
   if (!m) return `<span class="${rc}">${display}</span>`;
   const [, letter, score, venue, opponent, comp] = m;
+  const pensTag = pens ? ` <span class="wc-so">p</span>` : '';   // shootout marker, as in Knockout Odds
   const slug = nameToSlug[opponent.trim()];
   const oppHtml = slug
     ? `<span class="team-link linked" data-team-slug="${slug}" data-season="${season}"${tsViewLink ? ` data-ts-view="${tsViewLink}"` : ''}>${opponent}</span>`
     : opponent;
   const compStr = comp ? ` ${comp}` : '';
-  return `<span class="${rc}">${letter} ${score} ${venue} ${oppHtml}${compStr}</span>`;
+  return `<span class="${rc}">${letter} ${score}${pensTag} ${venue} ${oppHtml}${compStr}</span>`;
 }
 
 // ── Deep-link handlers ──────────────────────────────────────────────────────
@@ -1217,13 +1218,19 @@ function wcMatchesCell(g) {
     const date = mm.d ? `<span style="color:#999;font-size:0.85em;margin-right:8px;font-variant-numeric:tabular-nums">${mm.d}</span>` : '';
     const rd = mm.rd ? `<span class="wc-rd" style="margin-right:6px">${mm.rd}</span>` : '';
     const opp = (mm.r != null) ? ` <span style="color:#999;font-size:0.85em">#${mm.r} · ${mm.g.toFixed(2)}</span>` : '';
+    // Shootout: a knockout game with a level score is decided on penalties (group
+    // draws stay 'D'). Detected from the score + round; rendered as Knockout Odds does.
+    const sm = mm.s.match(/^([WL])\s+(\d+)\s*-\s*(\d+)/);
+    const pens = !!(mm.rd && mm.rd !== 'G' && sm && sm[2] === sm[3]);
     // Wrap round + match + opp in ONE inline span: in this flex row a bare whitespace
     // text node between two flex items is dropped, which would kill the space
     // before the opponent rank. Inside a single span it renders normally.
-    return `<div style="height:${WC_ROW}px;display:flex;align-items:center;white-space:nowrap">${date}<span>${rd}${renderLastMatch(mm.s, g.season, false, 'worldcup')}${opp}</span></div>`;
+    return `<div style="height:${WC_ROW}px;display:flex;align-items:center;white-space:nowrap">${date}<span>${rd}${renderLastMatch(mm.s, g.season, false, 'worldcup', pens)}${opp}</span></div>`;
   }).join('');
-  // baseline + half a row offsets the matches DOWN so each lands between two walk nodes
-  return `<td class="last-match-cell" style="padding-top:${WC_PAD + WC_ROW / 2}px;vertical-align:top">${html}</td>`;
+  // baseline + half a row offsets the matches DOWN so each lands between two walk nodes.
+  // Wider than the default last-match cap (240px) so the date+round+result+opp line
+  // doesn't bleed into the next column (the WC view's table has the room).
+  return `<td class="last-match-cell" style="padding-top:${WC_PAD + WC_ROW / 2}px;vertical-align:top;max-width:420px">${html}</td>`;
 }
 
 function renderTeamTable(opts = {}) {
