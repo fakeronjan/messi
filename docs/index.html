@@ -1463,7 +1463,7 @@ function renderLeagueHistory(league, targetId = 'history-table-wrap') {
     const confRank = t.conf_rank != null ? `${t.conf_rank}`    : '-';
     const slug = nameToSlug[t.team];
     const teamTd = slug
-      ? `<td class="${bg} team-cell linked" data-team-slug="${slug}" data-season="${season}" style="white-space:nowrap">${cellInner}</td>`
+      ? `<td class="${bg} team-cell linked" data-team-slug="${slug}" data-season="${season}"${league === 'FIFA World Cup' ? ' data-ts-view="worldcup"' : ''} style="white-space:nowrap">${cellInner}</td>`
       : `<td class="${bg} team-cell" style="white-space:nowrap">${cellInner}</td>`;
     return `
       ${teamTd}
@@ -1628,7 +1628,7 @@ function renderUpsets() {
   note.textContent = 'The biggest knockout upsets across every World Cup since 1990 - games the model gave the winner less than an even chance, sorted by the winner\'s pre-game win probability (lower = bigger shock)';
   const teamHtml = (name, flag) => {
     const slug = nameToSlug[name];
-    return slug ? `<span class="team-link linked" data-team-slug="${slug}">${flag || ''} ${name}</span>` : `${flag || ''} ${name}`;
+    return slug ? `<span class="team-link linked" data-team-slug="${slug}" data-ts-view="worldcup">${flag || ''} ${name}</span>` : `${flag || ''} ${name}`;
   };
   // Every upset is <50%, so they're all PINK (the grid's "unlikely" color) - the
   // gradient carries the shock: biggest upset (lowest odds) = deepest pink, mildest
@@ -1895,7 +1895,7 @@ function renderWcView() {
     const confB = conf ? `<div style="margin-top:2px">${wcConfBadge(conf)}</div>` : '';
     const inner = `<span style="margin-right:5px">${t.flag || ''}</span>${t.team}${confB}`;
     const teamTd = slug
-      ? `<td class="team-cell linked" data-team-slug="${slug}">${inner}</td>`
+      ? `<td class="team-cell linked" data-team-slug="${slug}" data-ts-view="worldcup">${inner}</td>`
       : `<td class="team-cell">${inner}</td>`;
     return `<tr class="${t.eliminated ? 'wc-elim' : ''}">
       <td class="rank-cell">${i + 1}</td>
