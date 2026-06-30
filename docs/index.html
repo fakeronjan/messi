@@ -1555,16 +1555,16 @@ function renderUpsets() {
     const slug = nameToSlug[name];
     return slug ? `<span class="team-link linked" data-team-slug="${slug}">${flag || ''} ${name}</span>` : `${flag || ''} ${name}`;
   };
-  // Shade the odds column like the Knockout Odds grid: same heat scale (low prob =
-  // pink/shock .. high prob = teal), spanning the shown upsets' range for contrast.
+  // Every upset is <50%, so they're all PINK (the grid's "unlikely" color) - the
+  // gradient carries the shock: biggest upset (lowest odds) = deepest pink, mildest
+  // = lightest. Alpha floored so even the near-coin-flips stay visibly pink.
   const pct = v => v * 100 < 1 ? '&lt;1%' : Math.round(v * 100) + '%';
-  const TEAL = [26, 107, 138], PINK = [255, 110, 180], MAXA = 0.70;
+  const PINK = [255, 110, 180], A_LO = 0.16, A_HI = 0.70;
   const _vs = ups.map(u => u.win_prob), _lo = Math.min(..._vs), _hi = Math.max(..._vs);
   const heat = v => {
-    if (_hi <= _lo) return '#eef5f8';
-    const t = Math.max(0, Math.min(1, (v - _lo) / (_hi - _lo)));
-    const [c, a] = t >= 0.5 ? [TEAL, (t - 0.5) * 2 * MAXA] : [PINK, (0.5 - t) * 2 * MAXA];
-    const mix = c.map(ch => Math.round(255 * (1 - a) + ch * a));
+    const t = _hi <= _lo ? 1 : Math.max(0, Math.min(1, (_hi - v) / (_hi - _lo)));
+    const a = A_LO + t * (A_HI - A_LO);
+    const mix = PINK.map(ch => Math.round(255 * (1 - a) + ch * a));
     return `rgb(${mix[0]},${mix[1]},${mix[2]})`;
   };
   const rows = ups.map((u, i) => `<tr>
