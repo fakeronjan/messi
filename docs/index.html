@@ -1656,7 +1656,7 @@ async function loadWcOdds() {
   } catch(e) { wcCalib = null; }
   const cn = document.getElementById('wc-calib-note');
   if (cn && wcCalib) {
-    cn.textContent = `These predictions have been validated against historical World Cups going back to ${wcCalib.first_year}. On average, predicted results are within ${Math.round(wcCalib.avg_error_pts)}% of the actual results.`;
+    cn.textContent = `These predictions have been validated against historical World Cups going back to ${wcCalib.first_year}.`;
   }
   renderWcOdds();
 }
