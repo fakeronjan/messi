@@ -1815,10 +1815,12 @@ function renderWcView() {
   }
   const teams = (view && view.teams) || [];
   if (!teams.length) return;
-  // 16-team-knockout editions (1990-2022) start at R16, so the R16 column is a
-  // trivial 100% - hide it. 48-team editions (R32 round) keep it.
+  // Each column is the odds of advancing OUT of that round (R32 -> R16 -> QF ->
+  // Semi -> Final), so the leftmost column names the first knockout round. The
+  // R32 column only exists for 48-team editions (2026+); 16-team editions
+  // (1990-2022) start at R16, so hide it there.
   const koSize = Math.max(0, (view.games_left || 0) + 1, ...snaps.map(s => (s.games_left || 0) + 1));
-  const showR16 = koSize > 16;
+  const showR32 = koSize > 16;
 
   const niceDate = ds => new Date(ds + 'T00:00:00').toLocaleDateString('en-US',
     { month: 'short', day: 'numeric', year: 'numeric' });
@@ -1832,7 +1834,7 @@ function renderWcView() {
   document.getElementById('wc-odds-title').textContent =
     `${edition} ${tournament} 🏆 Win Probability`;
   document.getElementById('wc-odds-note').textContent =
-    `${sims} Monte Carlo simulations · each column is the chance to reach that stage`;
+    `${sims} Monte Carlo simulations · each column is the chance to advance past that round`;
 
   // Below the dropdown: the matchday that produced this state - kept for EVERY
   // date, not just live. The full-R32 state (bracket set, no knockout game yet)
@@ -1860,9 +1862,11 @@ function renderWcView() {
   // alive teams, so colors compare like with like (champion share vs champion
   // share, R16 vs R16) and never an R16 % against a final %. Fleet colors:
   // teal (.bar-pos) = high, pink (.bar-neg) = low, white through the middle.
-  // Per-team knockout results mapped onto the probability columns: a decided
-  // game fixes the NEXT round's cell to certain (W) or impossible (L), so show
-  // W/L there instead of 100%/0%. R32 result -> R16 column, ..., Final -> Champ.
+  // Per-team knockout results shown as W/L in the column of the round they were
+  // played: a decided game is certain (W) or impossible (L), not a probability,
+  // so show W/L instead of 100%/0%. Each round's result lands in its own column
+  // (R32 result -> R32 column, ..., Final result -> Final column). The data keys
+  // are named for the round REACHED, one step ahead of the column label.
   const KO_COL = { R32: 'r16', R16: 'qf', QF: 'sf', SF: 'final', Final: 'champ' };
   teams.forEach(t => {
     const kr = {};
@@ -1948,7 +1952,7 @@ function renderWcView() {
       <td class="rating-cell od-cell col-hide-mobile">${fmtOD(t.rating_o, t.rank_o)}</td>
       <td class="rating-cell od-cell col-hide-mobile">${fmtOD(t.rating_d, t.rank_d)}</td>
       ${resultsCell(t)}
-      ${showR16 ? heatCell(t, 'r16', 'col-hide-mobile') : ''}${heatCell(t, 'qf', 'col-hide-mobile')}${heatCell(t, 'sf')}${heatCell(t, 'final')}
+      ${showR32 ? heatCell(t, 'r16', 'col-hide-mobile') : ''}${heatCell(t, 'qf', 'col-hide-mobile')}${heatCell(t, 'sf')}${heatCell(t, 'final')}
       ${champCell(t)}
     </tr>`;
   }).join('');
@@ -1959,9 +1963,9 @@ function renderWcView() {
       <th class="col-hide-mobile col-num" style="width:56px" title="Attacking strength: goals scored vs an average opponent. Sums with Defense to Rating.">OFF</th>
       <th class="col-hide-mobile col-num" style="width:56px" title="Defending strength: goals prevented vs an average opponent. Sums with Offense to Rating.">DEF</th>
       <th>Results</th>
-      ${showR16 ? '<th class="col-num wc-col col-hide-mobile">R16</th>' : ''}<th class="col-num wc-col col-hide-mobile">QF</th>
-      <th class="col-num wc-col">SF</th><th class="col-num wc-col">Final</th>
-      <th class="col-num wc-col">Champ 🏆</th>
+      ${showR32 ? '<th class="col-num wc-col col-hide-mobile">R32</th>' : ''}<th class="col-num wc-col col-hide-mobile">R16</th>
+      <th class="col-num wc-col">QF</th><th class="col-num wc-col">Semi</th>
+      <th class="col-num wc-col">Final 🏆</th>
     </tr></thead><tbody>${rows}</tbody></table>`;
   attachLinks();
 }
