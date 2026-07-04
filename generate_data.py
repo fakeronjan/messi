@@ -1755,8 +1755,14 @@ def _wc_history_snapshot(wc):
     _ts = wc.get('teams', [])
     if not _ts:
         return None
+    # Date the snapshot by the latest match it reflects, NOT the cron/generation
+    # day. The daily run fires the morning after a matchday (data lag + run time),
+    # so 'generated' sits a day ahead of the results the odds are built on - which
+    # made the date dropdown read one day late vs the rest of the fleet. Fall back
+    # to 'generated' only for states with no played match (e.g. resim backfills).
+    _lmd = wc.get('latest_matchday') or {}
     return {
-        'date': wc.get('generated'),
+        'date': _lmd.get('date') or wc.get('generated'),
         'phase': wc.get('phase', 'group') or 'group',
         'games_left': wc.get('games_left'),
         'complete': bool(wc.get('complete')),
