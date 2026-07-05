@@ -1406,6 +1406,19 @@ final_df = final_df[final_df['date'] >= pd.to_datetime('1986-01-01').date()]
 final_df = final_df[final_df['competitive_games_played'] >= min_competitive_games]
 print(f"After min_competitive_games={min_competitive_games} filter: {len(final_df)} rows")
 
+# Re-rank within each snapshot AFTER the eligibility filter. rank / rank_o /
+# rank_d are first assigned over the full window (in the ratings loop), which
+# includes sub-threshold teams that never appear in the displayed table. That
+# was invisible for the net rank (a no-sample minnow sits near the bottom, so
+# its gap is buried deep in the list) but showed on the O/D dimensions, where a
+# 0-competitive-game side can carry an artifact-high rating_d and occupy "D#1" -
+# leaving the world's best real defense labeled D#2 with no visible D#1, and
+# every eligible team's O/D rank silently offset. Ranking among eligible teams
+# only makes all three contiguous and correct. (method='min' matches upstream.)
+for _rank_col, _rating_col in (('rank', 'rating'), ('rank_o', 'rating_o'), ('rank_d', 'rating_d')):
+    final_df[_rank_col] = (final_df.groupby('ranking_id')[_rating_col]
+                                   .rank(ascending=False, method='min').astype(int))
+
 final_df.to_csv('messi_ratings_final.csv.gz', index=False, compression='gzip')
 print("messi_ratings_final.csv.gz saved!")
 print(f"\nTotal rows in final output: {len(final_df)}")
