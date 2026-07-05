@@ -149,7 +149,7 @@ TOURNAMENT_WEIGHTS = {
     'Oceania Nations Cup':               1.5,
 
     # Tier 3 - 1.25x: marquee one-offs + biennial nations leagues
-    'FIFA Confederations Cup':           1.25,
+    'Confederations Cup':                1.25,   # martj42 source string (NOT "FIFA Confederations Cup")
     'CONMEBOL–UEFA Cup of Champions':    1.25,
     'UEFA Nations League':               1.25,
     'CONCACAF Nations League':           1.25,
@@ -166,7 +166,7 @@ PODIUM_TOURNAMENTS = [
     'Oceania Nations Cup',        # source uses "Oceania" (not "OFC")
     'UEFA Nations League',
     'CONCACAF Nations League',
-    'FIFA Confederations Cup',    # discontinued 2017 but kept for historical podiums
+    'Confederations Cup',         # martj42 source string; discontinued 2017 but kept for historical podiums
 ]
 
 # Locked-in final dates for in-progress editions whose knockout fixtures are NOT
@@ -189,7 +189,7 @@ COMPETITIVE_TOURNAMENTS = {
     # FIFA global
     'FIFA World Cup',
     'FIFA World Cup qualification',
-    'FIFA Confederations Cup',
+    'Confederations Cup',   # martj42 source string (NOT "FIFA Confederations Cup") - senior FIFA event, must not fall through to friendly weight
     'FIFA Series',
     'CONMEBOL–UEFA Cup of Champions',
 
@@ -1236,6 +1236,17 @@ for (tournament, year), group in podium_df.groupby(['tournament', 'year']):
         # tournament is conclusively complete (≥14 days past latest match).
         last_dt = last_date.date() if hasattr(last_date, 'date') else last_date
         if (date.today() - last_dt).days < 14:
+            continue
+        # Bracket-walk couldn't find a clean semifinal->final structure. With a
+        # SINGLE game on the last date that game is the decider - safe to crown
+        # (two-legged Copa finals, Oceania/Euro one-off finals). With MULTIPLE
+        # last-day games it's genuinely ambiguous - a group/league-phase finish
+        # with no final at all (CONCACAF Nations League 2019 -> Puerto Rico;
+        # African Cup 2025 Dec group games; UEFA Nations League league phase),
+        # or the real final sitting beside a lower-stakes game (1995 King Fahd
+        # Cup: Denmark 2-0 Argentina AND Mexico 1-1 Nigeria same day). Picking
+        # arbitrarily crowned the wrong side every time, so don't guess.
+        if len(final_games) > 1:
             continue
         final = final_games.iloc[-1].to_dict()
 
