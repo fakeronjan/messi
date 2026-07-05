@@ -30,7 +30,7 @@ window_years       = 3              # rolling CALENDAR-year window for team rati
 recency_halflife_years = 1.5        # exponential recency half-life within the window. Recent
                                     # form dominates; a long light-weighted tail of pedigree
                                     # keeps proven teams from evaporating during lulls.
-margin_cap         = 8              # raised from 4 (ZIDANE/COBI default) per user 2026-05-30 to give intl soccer more margin signal headroom
+margin_cap         = 4              # ZIDANE/COBI soccer-family default. Was briefly 8 (2026-05-30, "margin signal headroom") but that raise PREDATED the confederation calibration (2026-06-07) and, with nothing to counterbalance it, let minnow blowouts inflate isolated blocs (OFC/Australia #1 in 2004). Reverted to 4 on 2026-07-05: the calibration now carries part of the SOS load, and past-4 goal margins are almost all minnow mismatches (only 2.76% of games exceed |5|)
 shootout_margin    = 0.5            # margin assigned to a shootout win
 home_field_adv     = 0.5            # per-game HCA on raw goal margin
 min_competitive_games = 5           # minimum NON-FRIENDLY games in window to appear in
