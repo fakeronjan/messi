@@ -1309,8 +1309,13 @@ _nteams = pd.concat([_ed['home_team'], _ed['away_team']]).nunique() if len(_ed) 
 if _nteams >= 4:
     _ngroups = _nteams // 4
     if _RESIM_ASOF is not None:               # re-sim a past state
+        # Keep _asof a Timestamp (NOT .date()) so it compares against the
+        # datetime64 `date` column below - newer pandas raises on datetime64-vs-
+        # date. Matches the group_end branch, which is already a Timestamp.
+        # Downstream _rating_rank_asof/_od_asof call .date() on it, which a
+        # Timestamp supports.
         _asof = (_ed.iloc[:_ngroups * 6]['date'].max()
-                 if _RESIM_ASOF == 'group_end' else pd.Timestamp(_RESIM_ASOF).date())
+                 if _RESIM_ASOF == 'group_end' else pd.Timestamp(_RESIM_ASOF))
         # Treat games AFTER the as-of date as unplayed (null scores) rather than
         # dropping them, so future fixtures keep their dates for the pending matchups.
         _ed = _ed.copy()
