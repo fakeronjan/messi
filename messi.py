@@ -127,6 +127,37 @@ FD_TEAM_ALIASES = {
 FD_OVERLAY_LOOKBACK_DAYS = 10
 FD_OVERLAY_LOOKAHEAD_DAYS = 3
 
+# Venue-city -> IANA timezone for the FIFA World Cup 2026 host cities, used to
+# convert football-data.org's UTC kickoff into the LOCAL match day (the date
+# martj42 and the site display by). martj42 occasionally ships a stale fixture
+# date before a volunteer fixes it; FD's kickoff + this map is the authority.
+# A late US-night kickoff (e.g. 00:00 UTC) can be the PREVIOUS local day, so the
+# raw UTC date is never trusted directly. Country fallback for anything unmapped.
+WC_VENUE_TZ = {
+    'Arlington':       'America/Chicago',      'Atlanta':        'America/New_York',
+    'Dallas':          'America/Chicago',      'East Rutherford': 'America/New_York',
+    'Foxborough':      'America/New_York',     'Guadalupe':      'America/Monterrey',
+    'Houston':         'America/Chicago',      'Inglewood':      'America/Los_Angeles',
+    'Kansas City':     'America/Chicago',      'Mexico City':    'America/Mexico_City',
+    'Miami Gardens':   'America/New_York',     'Philadelphia':   'America/New_York',
+    'Santa Clara':     'America/Los_Angeles',  'Seattle':        'America/Los_Angeles',
+    'Toronto':         'America/Toronto',      'Vancouver':      'America/Vancouver',
+    'Zapopan':         'America/Mexico_City',
+}
+_COUNTRY_TZ_FALLBACK = {
+    'United States': 'America/New_York', 'Canada': 'America/Toronto',
+    'Mexico': 'America/Mexico_City',
+}
+
+# Append-only DB horizon (DUNCAN model): games older than this are LOCKED to the
+# committed local DB - the daily martj42 re-fetch can no longer overwrite them,
+# it can only add genuinely new history. Games within the horizon are the
+# "active zone" (an in-progress tournament, recent friendlies/quals martj42 is
+# still backfilling) where the fresh fetch + FD overlay stay authoritative so
+# pending games finalize and live corrections land. Comfortably covers a full
+# major (~40 days) plus martj42's 1-2 day lag.
+DB_LOCK_DAYS = 60
+
 # ============================================================
 # TOURNAMENT CONFIGURATION
 # ============================================================
@@ -632,16 +663,42 @@ def _fd_key():
     return None
 
 
-def _overlay_live_scores(frame):
-    """Fill blank scores on in-progress major-tournament rows from football-data.org.
+def _fd_local_date(utc_iso, city, country):
+    """football-data.org UTC kickoff -> local match day (pd.Timestamp @ midnight).
 
-    martj42 stays the system of record: this ONLY fills rows whose home/away
-    score is currently blank, never overwrites. Matches on the unordered team
-    pair within +/-1 day (martj42 dates by local match day, football-data by UTC
-    kickoff, so a late US night game can differ by a day) and writes the score in
-    each martj42 row's own home/away orientation. Any failure (no key, network,
-    rate limit, API change) is swallowed - the daily build must never break over
-    a best-effort overlay. Returns the (possibly) mutated frame.
+    Uses the venue city's timezone (WC_VENUE_TZ), falling back to the country's,
+    so a 00:00-UTC US-night kickoff resolves to the correct previous local day.
+    Returns None if the timezone is unknown or the timestamp won't parse, so the
+    caller keeps martj42's date rather than guessing.
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    tzname = WC_VENUE_TZ.get(city) or _COUNTRY_TZ_FALLBACK.get(country)
+    if not tzname:
+        return None
+    try:
+        dt = datetime.fromisoformat(utc_iso.replace('Z', '+00:00')).astimezone(ZoneInfo(tzname))
+        return pd.Timestamp(dt.date())
+    except (ValueError, TypeError):
+        return None
+
+
+def _overlay_live_scores(frame):
+    """Overlay football-data.org onto in-progress major-tournament rows.
+
+    football-data.org is the AUTHORITY for the live major (the martj42 CC0 feed
+    lags 1-2 days and occasionally logs a wrong score or a stale fixture date).
+    For each FD fixture matched to a martj42 row (unordered team pair, within
+    +/-1 day of the UTC kickoff, since martj42 dates by local match day) this:
+      * rewrites the row's DATE to the LOCAL match day (FD kickoff converted via
+        the venue timezone, WC_VENUE_TZ) - so a stale martj42 date is corrected
+        while a 00:00-UTC US-night game stays on its true local day; and
+      * fills OR overwrites the score from FD's full-time result, in the row's
+        own home/away orientation.
+    Only the active competition's rows in a recent window are touched; everything
+    else (all history) is untouched here and locked by the append-only DB union.
+    Any failure (no key, network, rate limit, API change) is swallowed - the
+    daily build must never break over the overlay. Returns the mutated frame.
     """
     import json
     from urllib.request import Request, urlopen
@@ -649,25 +706,28 @@ def _overlay_live_scores(frame):
     today = pd.Timestamp('today').normalize()
     lo = today - pd.Timedelta(days=FD_OVERLAY_LOOKBACK_DAYS)
     hi = today + pd.Timedelta(days=FD_OVERLAY_LOOKAHEAD_DAYS)
+    w_lo, w_hi = lo - pd.Timedelta(days=1), hi + pd.Timedelta(days=1)
     blank = frame['home_score'].isna() | frame['away_score'].isna()
 
     for code, tournament in FD_LIVE_COMPETITIONS.items():
-        # Gate: only call the API if martj42 has a recent unplayed row for this
-        # tournament. Off-season there are none, so no request is made (and a
-        # cancelled/free key never matters).
-        gap = blank & (frame['tournament'] == tournament) & \
-              (frame['date'] >= lo) & (frame['date'] <= hi)
-        if not gap.any():
+        # Gate: only call the API when this tournament has recent rows at all
+        # (played or pending) - i.e. it's in progress. Off-season there are none,
+        # so no request is made (a cancelled/free key never matters). Widened from
+        # blanks-only so a wrong score on an already-played game can still be
+        # corrected once the last blank is filled.
+        active = (frame['tournament'] == tournament) & (frame['date'] >= lo) & (frame['date'] <= hi)
+        if not active.any():
             continue
 
         key = _fd_key()
         if not key:
-            print(f"  Live overlay: {gap.sum()} blank {tournament} row(s) but no "
+            print(f"  Live overlay: {int(active.sum())} recent {tournament} row(s) but no "
                   f"FOOTBALL_DATA_KEY - skipping (martj42 will backfill).")
             continue
 
         try:
-            req = Request(f"{FD_BASE}/competitions/{code}/matches?status=FINISHED",
+            req = Request(f"{FD_BASE}/competitions/{code}/matches"
+                          f"?dateFrom={w_lo.date()}&dateTo={w_hi.date()}",
                           headers={'X-Auth-Token': key})
             with urlopen(req, timeout=30) as resp:
                 payload = json.loads(resp.read().decode('utf-8'))
@@ -677,62 +737,120 @@ def _overlay_live_scores(frame):
                   f"({type(e).__name__}: {e}) - skipping, martj42 will backfill.")
             continue
 
-        # Index this tournament's rows by unordered team pair: `blanks` are
-        # fillable (the strict [lo,hi] gap); `pair_seen` is every row across a
-        # window widened by the +/-1 day match tolerance, so we can tell a genuine
-        # gap (missing fixture / bad alias) apart from a game martj42 already has -
-        # the latter is fine and must not be flagged. The widening matches the FD
-        # date filter below so a boundary game martj42 already scored isn't a
-        # false alarm.
-        w_lo, w_hi = lo - pd.Timedelta(days=1), hi + pd.Timedelta(days=1)
+        # Index every one of this tournament's rows in the (widened) window by
+        # unordered team pair. `pair_seen` lets us tell a genuine gap (missing
+        # fixture / bad alias) from a game martj42 already has, which is fine.
         window = (frame['tournament'] == tournament) & (frame['date'] >= w_lo) & (frame['date'] <= w_hi)
-        blanks, pair_seen = {}, set()
+        rows_by_pair, pair_seen = {}, set()
         for i, r in frame.loc[window, ['date', 'home_team', 'away_team']].iterrows():
             pk = frozenset((r['home_team'], r['away_team']))
             pair_seen.add(pk)
-            if gap.at[i]:
-                blanks.setdefault(pk, []).append(i)
+            rows_by_pair.setdefault(pk, []).append(i)
 
-        filled, unmatched, used = 0, [], set()
+        filled = corrected = redated = 0
+        unmatched, used = [], set()
         for m in matches:
-            ft = (m.get('score') or {}).get('fullTime') or {}
-            hs, as_ = ft.get('home'), ft.get('away')
-            if hs is None or as_ is None:
-                continue
             fh = FD_TEAM_ALIASES.get(m['homeTeam']['name'], m['homeTeam']['name'])
             fa = FD_TEAM_ALIASES.get(m['awayTeam']['name'], m['awayTeam']['name'])
-            fd_date = pd.Timestamp(m['utcDate'][:10])
-            # Ignore FD matches outside the active window (older editions/games
-            # martj42 long since has) - nothing to do, not a gap.
+            utc = m['utcDate']
+            fd_date = pd.Timestamp(utc[:10])
+            # martj42's home/away score is the pre-shootout result (end of
+            # regulation + extra time); the shootout winner lives in shootouts.csv
+            # and drives the ±margin downstream. FD's `fullTime` FOLDS IN the
+            # penalties for a shootout (e.g. 1-1 AET, 3-4 pens -> fullTime 4-5),
+            # so for those we take regularTime+extraTime; otherwise fullTime is
+            # already the AET/regulation result. A shootout row missing its
+            # regularTime is left to martj42 rather than guessed.
+            sc = m.get('score') or {}
+            if sc.get('duration') == 'PENALTY_SHOOTOUT':
+                rt, et = sc.get('regularTime') or {}, sc.get('extraTime') or {}
+                if rt.get('home') is None or rt.get('away') is None:
+                    hs = as_ = None
+                else:
+                    hs = rt['home'] + (et.get('home') or 0)
+                    as_ = rt['away'] + (et.get('away') or 0)
+            else:
+                ft = sc.get('fullTime') or {}
+                hs, as_ = ft.get('home'), ft.get('away')
+            has_score = hs is not None and as_ is not None
             if fd_date < w_lo or fd_date > w_hi:
                 continue
             pk = frozenset((fh, fa))
 
-            # Candidate blank rows for this pair, within +/-1 day of the UTC date,
-            # not already claimed by an earlier match of the same pairing.
-            cand = [i for i in blanks.get(pk, [])
-                    if i not in used and abs((frame.at[i, 'date'] - fd_date).days) <= 1]
+            # Closest unused row for this pair within +/-1 day of the UTC date.
+            cand = sorted((i for i in rows_by_pair.get(pk, [])
+                           if i not in used and abs((frame.at[i, 'date'] - fd_date).days) <= 1),
+                          key=lambda i: abs((frame.at[i, 'date'] - fd_date).days))
             if not cand:
-                # Flag a genuine gap only for a game squarely inside the fill
-                # window that martj42 has NO row for (missing fixture / bad alias).
-                # Games already scored (pair_seen) or sitting in the +/-1 day
-                # boundary margin are fine and stay quiet.
-                if pk not in pair_seen and lo <= fd_date <= hi:
+                # Genuine gap only for a scored game squarely inside the window
+                # that martj42 has NO row for (missing fixture / bad alias).
+                if has_score and pk not in pair_seen and lo <= fd_date <= hi:
                     unmatched.append(f"{fh} {hs}-{as_} {fa} ({fd_date.date()})")
                 continue
             i = cand[0]
             used.add(i)
-            if frame.at[i, 'home_team'] == fh:
-                frame.at[i, 'home_score'], frame.at[i, 'away_score'] = hs, as_
-            else:  # martj42 row has teams in the opposite orientation
-                frame.at[i, 'home_score'], frame.at[i, 'away_score'] = as_, hs
-            filled += 1
 
-        print(f"  Live overlay [{tournament}]: filled {filled} blank score(s) "
-              f"from football-data.org ({gap.sum()} were blank).")
+            # Date -> local match day from the venue timezone.
+            ld = _fd_local_date(utc, frame.at[i, 'city'], frame.at[i, 'country'])
+            if ld is not None and ld != frame.at[i, 'date']:
+                frame.at[i, 'date'] = ld
+                redated += 1
+
+            # Score: fill a blank, or overwrite a martj42 value that disagrees.
+            if has_score:
+                nh, na = (hs, as_) if frame.at[i, 'home_team'] == fh else (as_, hs)
+                was_blank = pd.isna(frame.at[i, 'home_score']) or pd.isna(frame.at[i, 'away_score'])
+                if was_blank:
+                    filled += 1
+                elif frame.at[i, 'home_score'] != nh or frame.at[i, 'away_score'] != na:
+                    corrected += 1
+                frame.at[i, 'home_score'], frame.at[i, 'away_score'] = nh, na
+
+        print(f"  Live overlay [{tournament}]: filled {filled}, overwrote {corrected}, "
+              f"re-dated {redated} row(s) from football-data.org.")
         if unmatched:
             print(f"  Live overlay [{tournament}]: {len(unmatched)} FINISHED match(es) "
                   f"could NOT be placed (check FD_TEAM_ALIASES / dates): {unmatched}")
+    return frame
+
+
+# ── Manual source corrections (thin escape hatch) ───────────────────────────
+# football-data.org is the authority for the live major and normally fixes
+# martj42's wrong scores/dates automatically (see _overlay_live_scores). This
+# list is the deterministic fallback for when the overlay CAN'T run (no key,
+# outage) or for a known martj42 error outside FD's free-tier coverage. Each
+# entry patches ONE row on its CURRENT (date, home, away) - and, for scores, the
+# exact bad value - so it self-deactivates the moment martj42 (or FD) corrects
+# upstream. Applied to BOTH the fresh download and the committed DB so a date
+# rewrite lines the corrected rows up on the merge key instead of duplicating.
+# Prune when martj42 has caught up.
+SOURCE_CORRECTIONS = [
+    # R16 date slips: FIFA schedules both on 2026-07-07; martj42 shows 07-06.
+    # (FD's tz-aware overlay fixes these too; kept so an FD outage can't strand a
+    # stale-dated pending twin as a duplicate.)
+    {'date': '2026-07-06', 'home': 'Argentina',   'away': 'Egypt',    'new_date': '2026-07-07'},
+    {'date': '2026-07-06', 'home': 'Switzerland', 'away': 'Colombia', 'new_date': '2026-07-07'},
+]
+
+
+def _apply_source_corrections(frame):
+    """Patch known-bad martj42 rows in place (see SOURCE_CORRECTIONS)."""
+    dates = pd.to_datetime(frame['date'])
+    for c in SOURCE_CORRECTIONS:
+        m = ((dates == pd.Timestamp(c['date']))
+             & (frame['home_team'] == c['home']) & (frame['away_team'] == c['away']))
+        if 'expect' in c:
+            m &= (frame['home_score'] == c['expect'][0]) & (frame['away_score'] == c['expect'][1])
+        if not m.any():
+            continue
+        if 'new_date' in c:
+            frame.loc[m, 'date'] = pd.Timestamp(c['new_date'])
+        if 'home_score' in c:
+            frame.loc[m, 'home_score'] = c['home_score']
+            frame.loc[m, 'away_score'] = c['away_score']
+        chg = {k: v for k, v in c.items() if k in ('new_date', 'home_score', 'away_score')}
+        print(f"  Source correction [{int(m.sum())} row]: "
+              f"{c['home']} v {c['away']} ({c['date']}) -> {chg}")
     return frame
 
 
@@ -748,6 +866,11 @@ print(f"Shootouts loaded: {len(shootouts_df)} rows")
 
 raw_df['date'] = pd.to_datetime(raw_df['date'])
 shootouts_df['date'] = pd.to_datetime(shootouts_df['date'])
+
+# Deterministic fallback corrections (see SOURCE_CORRECTIONS) before the FD
+# overlay and DB union. The overlay normally supersedes these; they matter when
+# it can't run, and keep a stale-dated pending row from duplicating.
+raw_df = _apply_source_corrections(raw_df)
 
 # Best-effort live-score overlay for an in-progress major (see config above).
 # Wrapped so a bug or outage here can never fail the daily ratings build.
@@ -879,17 +1002,23 @@ df = df[
 ].copy()
 print(f"After non-FIFA team drop: {len(df)} rows ({_n_before - len(df)} matches removed)")
 
-# Append-only DB guard: the results CSV is re-fetched in full from a remote
-# source every run and overwritten. If that fetch comes back short, games we
-# already have would be silently deleted - and because grouped_date_id below is
-# positional, the date set shifting would also desync the ratings cache. Treat
-# the committed file as the database: fresh rows win on conflict (so score/data
-# corrections land), but games already stored that this run's fetch missed are
-# preserved. History can only grow or be corrected, never silently shrink.
+# Append-only DB (DUNCAN model): all_soccer_games.csv is the source of truth.
+# martj42 is re-fetched in full every run, but it does NOT get to re-derive the
+# whole database. Games older than DB_LOCK_DAYS are LOCKED to the committed file
+# - the re-fetch can only ADD new history, never overwrite a recorded result (so
+# a flaky/short fetch or a late upstream edit can't silently corrupt or shift the
+# positional date-id cache). Only the "active zone" (recent + near-future:
+# in-progress tournaments, games martj42 is still backfilling) stays fresh-
+# authoritative, so pending games finalize and live/FD corrections land. Games
+# the fetch didn't return at all are always preserved. History grows and the
+# active tail is corrected; settled history never silently shrinks or churns.
 if os.path.exists('all_soccer_games.csv'):
     _prev = pd.read_csv('all_soccer_games.csv')
     _prev['date'] = pd.to_datetime(_prev['date'], errors='coerce')
     _prev = _prev.drop(columns=[c for c in ('grouped_date_id', 'unique_game_id') if c in _prev.columns])
+    # Same corrections on the committed DB, so a date rewrite lines the row up
+    # with its corrected fresh twin on the merge key instead of duplicating.
+    _prev = _apply_source_corrections(_prev)
     # Normalize committed names too, so a source rename collapses on the dedup
     # below instead of leaving an orphaned duplicate of the renamed team.
     _normalize_team_names(_prev, ['home_team', 'away_team', 'shootout_winner'])
@@ -904,22 +1033,36 @@ if os.path.exists('all_soccer_games.csv'):
               f"(possible source rename - add to TEAM_NAME_NORMALIZATION): {sorted(str(t) for t in _orphans)}")
 
     _key = ['date', 'home_team', 'away_team']
-    _fresh = df.copy();  _fresh['_src_priority'] = 0
-    _prevp = _prev.copy(); _prevp['_src_priority'] = 1
+    _horizon = pd.Timestamp('today').normalize() - pd.Timedelta(days=DB_LOCK_DAYS)
+    # Per-row merge priority (lower wins the dedup). Active zone (date >= horizon):
+    # fresh is authoritative (0) so it finalizes pending games and lands live/FD
+    # corrections. Locked history (date < horizon): the committed DB wins (0) and
+    # the re-fetch (1) can only contribute rows for keys the DB doesn't have yet.
+    _fresh = df.copy()
+    _prevp = _prev.copy()
+    _fresh['_pri'] = np.where(_fresh['date'] >= _horizon, 0, 1)
+    _prevp['_pri'] = np.where(_prevp['date'] >= _horizon, 1, 0)
     _combined = pd.concat([_fresh, _prevp], ignore_index=True, sort=False)
-    _combined = _combined.sort_values('_src_priority').drop_duplicates(subset=_key, keep='first')
+    _combined = _combined.sort_values('_pri', kind='mergesort').drop_duplicates(subset=_key, keep='first')
     _fk = set(map(tuple, df[_key].astype(str).values))
-    _pres = sum(1 for k in map(tuple, _prev[_key].astype(str).values) if k not in _fk)
-    if _pres:
-        print(f"[db-union] preserved {_pres:,} games already in the database "
-              f"that this run's fetch did not return (flaky source - not deleting history)")
-    df = _combined.drop(columns=['_src_priority']).reset_index(drop=True)
+    _pk = set(map(tuple, _prev[_key].astype(str).values))
+    _added, _preserved = len(_fk - _pk), len(_pk - _fk)
+    _locked = int((_prevp['date'] < _horizon).sum())
+    print(f"[db-union] {len(df):,} fresh + {len(_prev):,} committed -> {len(_combined):,} rows "
+          f"(+{_added:,} new, {_preserved:,} preserved from DB, "
+          f"~{_locked:,} historical rows locked to committed values; horizon {_horizon.date()})")
+    df = _combined.drop(columns=['_pri']).reset_index(drop=True)
 
 # ============================================================
 # STEP 7 - DATE IDs FOR ROLLING WINDOW
 # ============================================================
 
-df.sort_values('date', inplace=True)
+# Canonical, stable row order (date, then teams) so the committed DB is a
+# deterministic snapshot: the append-only union feeds fresh + locked rows in a
+# merge-dependent order, and a plain date sort leaves within-date ties to
+# reshuffle each run (huge spurious diffs). Sorting on the full game key pins the
+# order to content, so a run only rewrites rows whose data actually changed.
+df.sort_values(['date', 'home_team', 'away_team'], kind='stable', inplace=True)
 df.reset_index(drop=True, inplace=True)
 
 df['grouped_date_id'] = df.groupby('date').ngroup() + 1
