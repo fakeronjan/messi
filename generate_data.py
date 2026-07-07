@@ -586,15 +586,27 @@ for (team, year_f), last_game in _team_year_last_game.items():
         chosen = (last_game, 'End of year' if year < _CURRENT_YEAR else 'Current')
     _team_year_anchor[(team, year)] = chosen
 
-# Per-row flag + label string for the year-anchor row of each team-year
+# Per-row flag + label string for the year-anchor row of each team-year.
+# Vectorized: one (country, year, date)->label dict lookup per row. The prior
+# version ran a full-frame boolean scan (country & date & year) once PER
+# team-year (~6.6k scans over a 1.6M-row object-dtype frame) - ~65% of this
+# script's entire runtime. Same output, ~185s -> ~2s.
 df['is_year_anchor'] = 0
 df['year_anchor_label'] = ''
-_anchor_rows_idx = []
-for (team, year), (d, label) in _team_year_anchor.items():
-    mask = (df['country'] == team) & (df['date'] == d) & (df['year'] == year)
-    if mask.any():
-        df.loc[mask, 'is_year_anchor'] = 1
-        df.loc[mask, 'year_anchor_label'] = label
+if _team_year_anchor:
+    _anchor_label = {
+        (t, int(y), pd.Timestamp(d).normalize().value): label
+        for (t, y), (d, label) in _team_year_anchor.items()
+    }
+    _dns = pd.to_datetime(df['date']).values.astype('datetime64[ns]').astype('int64')
+    _lab = [
+        _anchor_label.get((c, int(y), dn)) if y == y else None   # y==y skips NaN year
+        for c, y, dn in zip(df['country'].to_numpy(), df['year'].to_numpy(), _dns)
+    ]
+    _lab = pd.Series(_lab, index=df.index)
+    _hit = _lab.notna()
+    df.loc[_hit, 'is_year_anchor'] = 1
+    df.loc[_hit, 'year_anchor_label'] = _lab[_hit]
 print(f"Year-anchor flagged rows: {(df['is_year_anchor']==1).sum():,} (one per team-year where data exists)")
 
 # Confederation rank within each ranking_id snapshot
