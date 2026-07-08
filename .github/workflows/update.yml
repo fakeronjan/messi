@@ -24,6 +24,18 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # Ratings cache lives in the Actions cache, NOT git (it's a regenerable
+      # build artifact - messi.py's incremental scratchpad - and re-committing a
+      # 58MB gzip daily bloated the repo). Rolling key + prefix restore-keys:
+      # every run writes a fresh entry and restores the most recent prior one.
+      # A miss (first run / eviction) is safe: messi.py rebuilds from scratch.
+      - name: Restore ratings cache
+        uses: actions/cache/restore@v4
+        with:
+          path: messi_ratings.csv.gz
+          key: messi-ratings-${{ github.run_id }}
+          restore-keys: messi-ratings-
+
       - name: Run ratings engine
         run: python messi.py
         env:
@@ -32,6 +44,14 @@ jobs:
           # scoped key shared with the zidane/fantasy-world-cup repos. WC is on
           # football-data's free tier; absent the key the overlay just no-ops.
           FOOTBALL_DATA_KEY: ${{ secrets.FOOTBALL_DATA_KEY }}
+
+      # Persist the freshly-updated cache for the next run (only reached if
+      # messi.py succeeded, so a failed run never saves a partial cache).
+      - name: Save ratings cache
+        uses: actions/cache/save@v4
+        with:
+          path: messi_ratings.csv.gz
+          key: messi-ratings-${{ github.run_id }}
 
       - name: Generate web data
         run: python generate_data.py
@@ -46,7 +66,7 @@ jobs:
         run: |
           git config user.name  "MESSI Bot"
           git config user.email "messi-bot@users.noreply.github.com"
-          git add all_soccer_games.csv messi_ratings.csv.gz messi_ratings_final.csv.gz tournament_podiums.csv docs/data/
+          git add all_soccer_games.csv tournament_podiums.csv docs/data/
           if git diff --staged --quiet; then
             echo "No changes to commit."
           else

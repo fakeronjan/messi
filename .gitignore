@@ -7,3 +7,5 @@ messi_ratings_final.csv
 
 # Engine-migration backup snapshots (never commit)
 *-bak
+messi_ratings.csv.gz
+messi_ratings_final.csv.gz
