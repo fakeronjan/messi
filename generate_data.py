@@ -11,8 +11,14 @@ import json
 import os
 import re
 import glob
+import hashlib
 from datetime import datetime, timezone
 from bisect import bisect_right
+
+
+def _stable_digest(obj):
+    """Order-stable md5 of a JSON-able object (for incremental change detection)."""
+    return hashlib.md5(json.dumps(obj, sort_keys=True, default=str).encode()).hexdigest()
 
 os.makedirs('docs/data/teams', exist_ok=True)
 os.makedirs('docs/data/seasons', exist_ok=True)
@@ -917,9 +923,43 @@ print(f"  Found {len(date_label_map)} tournament-end snapshot dates")
 print("Writing season standings files...")
 all_seasons = sorted(df['year'].dropna().unique())
 
+# Incremental: a season file is a pure function of that year's rating rows plus
+# the small global lookups the writer consults (finishes / continental winners /
+# date labels / name-history). Hash both and skip rebuilding+rewriting a season
+# whose hash is unchanged since last run. The append-only DB freezes historical
+# ratings, so on a normal day only the live year rebuilds (and on the monthly
+# confed-offset recompute, when every rating shifts, all years do). Unchanged
+# files are never rewritten, so git stops churning ~300MB of season JSON daily.
+_SEASON_COLS = ['ranking_id', 'rank', 'country', 'confederation', 'rating',
+                'rating_o', 'rating_d', 'rank_o', 'rank_d', 'last_match',
+                'last_match_date', 'date']
+_season_ginput = _stable_digest([
+    sorted((f"{k[0]}|{k[1]}", v) for k, v in _country_year_finishes.items()),
+    sorted(f"{a}|{b}" for a, b in _continental_winners),
+    sorted((str(k), list(v)) for k, v in date_label_map.items()),
+    sorted((k, [(n, str(s), str(e)) for n, s, e in v]) for k, v in _NAME_HISTORY_PARSED.items()),
+])
+_season_manifest_path = 'docs/data/.seasons_manifest.json'
+try:
+    _season_manifest = json.load(open(_season_manifest_path))
+except (FileNotFoundError, ValueError):
+    _season_manifest = {}
+_season_new_manifest = {}
+_season_rebuilt = _season_skipped = 0
+
 for season in all_seasons:
     season = int(season)
     sdf = df[df['year'] == season]
+    _season_hash = _stable_digest([
+        _season_ginput,
+        int(pd.util.hash_pandas_object(sdf[_SEASON_COLS], index=False).sum()),
+    ])
+    _season_new_manifest[str(season)] = _season_hash
+    _season_path = f'docs/data/seasons/{season}.json'
+    if _season_manifest.get(str(season)) == _season_hash and os.path.exists(_season_path):
+        _season_skipped += 1
+        continue
+    _season_rebuilt += 1
     snapshots = []
     for ranking_id, rdf in sdf.groupby('ranking_id'):
         rdf = rdf.sort_values('rank')
@@ -952,8 +992,11 @@ for season in all_seasons:
         snapshots.append({'date': snap_date, 'label': label, 'prestige': prestige, 'teams': teams_snap})
 
     snapshots.sort(key=lambda x: x['date'])
-    with open(f'docs/data/seasons/{season}.json', 'w') as f:
+    with open(_season_path, 'w') as f:
         json.dump({'season': season, 'snapshots': snapshots}, f, separators=(',', ':'))
+
+json.dump(_season_new_manifest, open(_season_manifest_path, 'w'), separators=(',', ':'))
+print(f"  Season files: {_season_rebuilt} rebuilt, {_season_skipped} unchanged (skipped)")
 
 seasons_meta = {
     'seasons':    [int(s) for s in reversed(all_seasons)],
@@ -1846,4 +1889,4 @@ if _RESIM_ASOF is not None:
 _append_wc_history(wc_odds)
 
 print(f"Done. {len(teams_index)} teams, {len(standings_data['teams'])} in current standings.")
-print(f"Wrote {len(all_seasons)} season files. Standings date: {latest_date}")
+print(f"Season files: {_season_rebuilt} rebuilt / {len(all_seasons)} total. Standings date: {latest_date}")
