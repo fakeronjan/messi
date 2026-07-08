@@ -950,9 +950,16 @@ _season_rebuilt = _season_skipped = 0
 for season in all_seasons:
     season = int(season)
     sdf = df[df['year'] == season]
+    # Hash the OUTPUT-rounded values, not the raw floats: messi.py's ratings are
+    # not bit-reproducible run-to-run (FP summation order under hash-randomized
+    # set iteration), but they round to the same 3 dp that the JSON actually
+    # emits. Hashing raw floats would mismatch every run and never skip.
+    _proj = sdf[_SEASON_COLS].copy()
+    for _c in ('rating', 'rating_o', 'rating_d'):
+        _proj[_c] = _proj[_c].round(3)
     _season_hash = _stable_digest([
         _season_ginput,
-        int(pd.util.hash_pandas_object(sdf[_SEASON_COLS], index=False).sum()),
+        int(pd.util.hash_pandas_object(_proj, index=False).sum()),
     ])
     _season_new_manifest[str(season)] = _season_hash
     _season_path = f'docs/data/seasons/{season}.json'
