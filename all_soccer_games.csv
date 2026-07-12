@@ -34594,5 +34594,5 @@ date,home_team,away_team,home_score,away_score,tournament,city,country,neutral,s
 2026-07-07,Switzerland,Colombia,0.0,0.0,FIFA World Cup,Vancouver,Canada,True,Switzerland,0.0,-0.0,0.5,-0.5,0.0,0.5,-0.5,competitive,1.0,2.0,1.0,0.0,UEFA,CONMEBOL,8838,540.0
 2026-07-09,France,Morocco,2.0,0.0,FIFA World Cup,Foxborough,United States,True,,2.0,-2.0,2.0,-2.0,0.0,2.0,-2.0,competitive,1.0,2.0,1.0,0.0,UEFA,CAF,8839,
 2026-07-10,Spain,Belgium,2.0,1.0,FIFA World Cup,Inglewood,United States,True,,1.0,-1.0,1.0,-1.0,0.0,1.0,-1.0,competitive,1.0,2.0,1.0,0.0,UEFA,UEFA,8840,
-2026-07-11,Argentina,Switzerland,,,FIFA World Cup,Kansas City,United States,True,,,,,,0.0,,,competitive,1.0,2.0,0.0,1.0,CONMEBOL,UEFA,8841,
-2026-07-11,Norway,England,,,FIFA World Cup,Miami Gardens,United States,True,,,,,,0.0,,,competitive,1.0,2.0,0.0,1.0,UEFA,UEFA,8841,
+2026-07-11,Argentina,Switzerland,3.0,1.0,FIFA World Cup,Kansas City,United States,True,,2.0,-2.0,2.0,-2.0,0.0,2.0,-2.0,competitive,1.0,2.0,1.0,0.0,CONMEBOL,UEFA,8841,
+2026-07-11,Norway,England,1.0,2.0,FIFA World Cup,Miami Gardens,United States,True,,-1.0,1.0,-1.0,1.0,0.0,-1.0,1.0,competitive,1.0,2.0,0.0,1.0,UEFA,UEFA,8841,
