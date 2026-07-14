@@ -858,6 +858,14 @@ print("Loading results from GitHub...")
 raw_df = pd.read_csv(data_url)
 shootouts_df = pd.read_csv(shootouts_url)
 
+# TBD fixture placeholders (e.g. an unset World Cup final date/venue with no
+# teams assigned yet) show up as NaN home_team/away_team rows in the source -
+# drop them before anything downstream assumes team names are strings.
+_n_tbd = raw_df['home_team'].isna().sum() + raw_df['away_team'].isna().sum()
+if _n_tbd:
+    print(f"Dropping {_n_tbd} TBD fixture placeholder row(s) with no teams assigned.")
+    raw_df = raw_df.dropna(subset=['home_team', 'away_team']).copy()
+
 _normalize_team_names(raw_df, ['home_team', 'away_team'])
 _normalize_team_names(shootouts_df, ['home_team', 'away_team', 'winner'])
 
