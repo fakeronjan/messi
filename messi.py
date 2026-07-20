@@ -919,8 +919,8 @@ shootout_mask = (
     (df['raw_margin_home'] == 0)
 )
 
-df['margin_home'] = df['raw_margin_home']
-df['margin_away'] = df['raw_margin_away']
+df['margin_home'] = df['raw_margin_home'].astype(float)
+df['margin_away'] = df['raw_margin_away'].astype(float)
 
 df.loc[shootout_mask & (df['shootout_winner'] == df['home_team']), 'margin_home'] =  shootout_margin
 df.loc[shootout_mask & (df['shootout_winner'] == df['home_team']), 'margin_away'] = -shootout_margin
