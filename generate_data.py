@@ -1554,10 +1554,9 @@ if _nteams >= 4:
     # fit, same group tiebreaks, same rating-seeded bracket, same shootout logit);
     # only the RNG draw order changes, so odds differ from the old loop solely by
     # Monte-Carlo noise (validated to agree within ~3 standard errors).
-    # Fleet standard since 2026-09-25: 100k for playoff/knockout odds (~0.1-pt
-    # Monte-Carlo noise; 1M wasn't a visible gain). Past snapshots saved at 1M
-    # keep their own n_sims label.
-    _NSIM = 100_000
+    # Fleet standard since 2026-10-02: 10k sims at every stage. Past snapshots
+    # saved at 1M or 100k keep their own n_sims label.
+    _NSIM = 10_000
     _CHUNK = 200_000          # cap peak memory; reach accumulates across chunks
     _tlist = list(_teams)
     _tix = {t: j for j, t in enumerate(_tlist)}

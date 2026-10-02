@@ -91,7 +91,7 @@ print(f"goals model: mu={GM_MU:.3f} a={GM_A:.3f} b={GM_B:.3f} (fit on {len(_gm):
 _RNG = np.random.default_rng(20260101)
 STAGE = {32: 'r32', 16: 'r16', 8: 'qf', 4: 'sf', 2: 'final', 1: 'champ'}
 KEYS = ('r32', 'r16', 'qf', 'sf', 'final', 'champ')
-NSIM, CHUNK = 100_000, 200_000  # fleet standard (was 1M)
+NSIM, CHUNK = 10_000, 200_000  # fleet standard since 2026-10-02 (was 100k, then 1M)
 KO_LABELS = {16: ['R16', 'QF', 'SF', 'Final']}   # 16-team knockout (all past editions)
 
 
