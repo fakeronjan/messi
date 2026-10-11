@@ -1331,7 +1331,66 @@ podium_df['year'] = podium_df['date'].dt.year
 
 podium_records = []
 
+# Nations Leagues span two calendar years, so a calendar-year group holds a
+# league phase (Sep-Nov, no final) and sometimes the previous cycle's Finals.
+# The bracket-walk below crowned league-phase group winners (CNL 2023 Saint
+# Martin, 2026 Montserrat; UEFA 2018 Sweden, 2020 Wales). Their podium comes
+# only from a Final Four: two semis, then the final + 3rd-place game within
+# 5 days, all between the same four teams. A league-phase group of four
+# makes the same day pattern inside one international window, so the four
+# must also not meet in the 120 days before the final or the 60 after (a
+# group meets in neighboring windows, at most a June -> September gap;
+# Finals teams come from different groups, and back-to-back Finals are a
+# year apart). No Final Four, no podium.
+NATIONS_LEAGUES = {'UEFA Nations League', 'CONCACAF Nations League'}
+
+
+def _game_winner(g):
+    if g['margin_home'] > 0: return g['home_team']
+    if g['margin_home'] < 0: return g['away_team']
+    sw = g.get('shootout_winner')
+    return sw if pd.notna(sw) else None
+
+
+def _final_four(group):
+    """(final, third_place) game rows of a Nations League Finals, or None."""
+    for d in sorted(group['date'].unique(), reverse=True):
+        day = group[group['date'] == d]
+        semis_pool = group[(group['date'] < d) & (group['date'] >= d - pd.Timedelta(days=5))]
+        for _, f in day.iterrows():
+            for _, t in day.iterrows():
+                four = {f['home_team'], f['away_team'], t['home_team'], t['away_team']}
+                if len(four) != 4:
+                    continue
+                near = podium_df[(podium_df['tournament'] == group['tournament'].iloc[0])
+                                 & (podium_df['date'] >= d - pd.Timedelta(days=120))
+                                 & (podium_df['date'] <= d + pd.Timedelta(days=60))]
+                if (near['home_team'].isin(four) & near['away_team'].isin(four)).sum() != 4:
+                    continue
+                semis = semis_pool[semis_pool['home_team'].isin(four) & semis_pool['away_team'].isin(four)]
+                if len(semis) != 2:
+                    continue
+                winners = {_game_winner(s) for _, s in semis.iterrows()}
+                if winners == {f['home_team'], f['away_team']}:
+                    return f, t
+    return None
+
+
 for (tournament, year), group in podium_df.groupby(['tournament', 'year']):
+
+    if tournament in NATIONS_LEAGUES:
+        ff = _final_four(group.sort_values('date'))
+        if ff is None:
+            continue
+        for row, top in zip(ff, (1, 3)):
+            w = _game_winner(row)
+            if w is None:
+                continue
+            podium_records.append({'tournament': tournament, 'year': year, 'team': w, 'finish': top})
+            if top == 1:
+                loser = row['away_team'] if w == row['home_team'] else row['home_team']
+                podium_records.append({'tournament': tournament, 'year': year, 'team': loser, 'finish': 2})
+        continue
 
     # Don't crown a champion for a tournament that isn't over:
     #   (a) it still has loaded fixtures left to play (group stage in progress), or
